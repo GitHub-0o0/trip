@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+    <script>
+      // Early suppression of third-party script/domain authorization failures inside sandbox environments
+      (function() {
+        var originalOnError = window.onerror;
+        window.onerror = function (message, source, lineno, colno, error) {
+          var msgStr = String(message || '');
+          var sourceStr = String(source || '');
+          if (
+            msgStr.indexOf('INVALID_USER_DOMAIN') !== -1 ||
+            msgStr.indexOf('FlyDataAuthTask') !== -1 ||
+            msgStr.indexOf('Script error.') !== -1 ||
+            sourceStr.indexOf('amap.com') !== -1 ||
+            sourceStr.indexOf('googleapis.com') !== -1 ||
+            sourceStr.indexOf('gstatic.com') !== -1
+          ) {
+            console.warn('⚡ Suppressed third-party script/domain authorization error:', msgStr, 'from:', sourceStr);
+            return true; // Suppress error popup/bubbles
+          }
+          if (originalOnError) {
+            return originalOnError.apply(this, arguments);
+          }
+          return false;
+        };
+
+        window.addEventListener('error', function(event) {
+          var msg = String(event.message || '');
+          var filename = String(event.filename || '');
+          if (
+            msg.indexOf('INVALID_USER_DOMAIN') !== -1 ||
+            msg.indexOf('FlyDataAuthTask') !== -1 ||
+            msg.indexOf('Script error.') !== -1 ||
+            filename.indexOf('amap.com') !== -1 ||
+            filename.indexOf('googleapis.com') !== -1 ||
+            filename.indexOf('gstatic.com') !== -1
+          ) {
+            console.warn('⚡ Intercepted error event in HTML:', msg);
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          var reasonStr = String(event.reason || '');
+          var msg = (event.reason && event.reason.message) ? String(event.reason.message) : reasonStr;
+          if (
+            msg.indexOf('INVALID_USER_DOMAIN') !== -1 ||
+            msg.indexOf('FlyDataAuthTask') !== -1 ||
+            reasonStr.indexOf('INVALID_USER_DOMAIN') !== -1 ||
+            reasonStr.indexOf('FlyDataAuthTask') !== -1
+          ) {
+            console.warn('⚡ Suppressed unhandled promise rejection in HTML:', msg);
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
