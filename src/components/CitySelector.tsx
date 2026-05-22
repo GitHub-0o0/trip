@@ -5,9 +5,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { ALL_CITIES_INDEX, CN_CITIES, INTL_CITIES } from '../data/cities';
-import { CityIndex, CitySelection } from '../types';
+import { CityIndex, CitySelection, CustomLlmConfig } from '../types';
 import { TranslationDict } from '../data/i18n';
-import { Search, MapPin, Plus, Trash2, Sliders, ChevronRight, HelpCircle, Compass, ArrowRight, Loader } from 'lucide-react';
+import { Search, MapPin, Plus, Trash2, Sliders, ChevronRight, HelpCircle, Compass, ArrowRight, Loader, Sparkles } from 'lucide-react';
 
 interface CitySelectorProps {
   t: TranslationDict;
@@ -20,6 +20,9 @@ interface CitySelectorProps {
   setIsAiEnhanced: (enhanced: boolean) => void;
   onGenerate: () => void;
   isLoading: boolean;
+  customLlmConfig: CustomLlmConfig;
+  customCities: CityIndex[];
+  onAddCustomCity: (city: CityIndex) => void;
 }
 
 export default function CitySelector({
@@ -32,7 +35,10 @@ export default function CitySelector({
   isAiEnhanced,
   setIsAiEnhanced,
   onGenerate,
-  isLoading
+  isLoading,
+  customLlmConfig,
+  customCities,
+  onAddCustomCity
 }: CitySelectorProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,6 +53,8 @@ export default function CitySelector({
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const [isGeneratingCity, setIsGeneratingCity] = useState(false);
+
   // Perform city matching
   useEffect(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -55,8 +63,9 @@ export default function CitySelector({
       return;
     }
 
-    // Local filters
-    const matched = ALL_CITIES_INDEX.filter((c) => {
+    // Local filters (static + custom generated)
+    const allAvailable = [...ALL_CITIES_INDEX, ...customCities];
+    const matched = allAvailable.filter((c) => {
       const isRegionOk =
         regionFilter === 'all' ||
         (regionFilter === 'cn' && !c.isInternational) ||
@@ -94,7 +103,7 @@ export default function CitySelector({
 
       return () => clearTimeout(delaySearch);
     }
-  }, [searchQuery, regionFilter]);
+  }, [searchQuery, regionFilter, customCities]);
 
   // Handle departure click assignment
   const handleSelectDeparture = (id: string) => {
@@ -142,12 +151,55 @@ export default function CitySelector({
   };
 
   const getCityLabel = (id: string) => {
-    const city = ALL_CITIES_INDEX.find((c) => c.id === id);
+    const city = [...ALL_CITIES_INDEX, ...customCities].find((c) => c.id === id);
     if (!city) {
       // capitalised id helper
       return id.charAt(0).toUpperCase() + id.slice(1);
     }
     return lang === 'zh' ? city.name : city.nameEn;
+  };
+
+  const handleGenerateAndWriteCity = async (queryText: string, type: 'departure' | 'destination') => {
+    setIsGeneratingCity(true);
+    try {
+      const response = await fetch('/api/cities/generate-write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: queryText,
+          customLlm: customLlmConfig
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Server rejected city generation');
+      }
+
+      const data = await response.json();
+      if (data.success && data.cityIndex) {
+        const newCity = data.cityIndex;
+        onAddCustomCity(newCity);
+        
+        if (type === 'departure') {
+          setDepartureCity(newCity.id);
+          triggerToast(lang === 'zh' ? `已深度解析并写入出发城市：${newCity.name} 🚀` : `Departure city initialized & written: ${newCity.nameEn} 🚀`);
+        } else {
+          handleAddDestination(newCity.id);
+          triggerToast(lang === 'zh' ? `已深度解析并写入目的地：${newCity.name} 🚀` : `Destination city initialized & written: ${newCity.nameEn} 🚀`);
+        }
+
+        setSearchQuery('');
+        setSearchResults([]);
+      } else {
+        throw new Error('Received payload layout format error');
+      }
+    } catch (err: any) {
+      console.error(err);
+      triggerToast(lang === 'zh' ? `大模型写入失败: ${err.message}` : `LLM dynamic write failed: ${err.message}`);
+    } finally {
+      setIsGeneratingCity(false);
+    }
   };
 
   const currentDepartureName = departureCity ? getCityLabel(departureCity) : null;
@@ -278,6 +330,36 @@ export default function CitySelector({
             </div>
           )}
 
+          {searchQuery.trim().length >= 2 && !isSearchingOnline && (
+            <div className="bg-gradient-to-r from-blue-50/60 to-indigo-50/60 border border-blue-100 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm animate-fade-in mt-1">
+              <div className="flex items-center gap-2.5 text-slate-700 text-left">
+                <Sparkles className="w-4 h-4 text-blue-600 shrink-0 animate-pulse" />
+                <span className="text-xs">
+                  {lang === 'zh'
+                    ? `没在列表中看到所需城市？让 AI 实时解析并写入新城市 "${searchQuery}"`
+                    : `Don't see it? Ask AI to dynamically parse & write "${searchQuery}"`}
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={isGeneratingCity}
+                onClick={() => handleGenerateAndWriteCity(searchQuery, 'departure')}
+                className="shrink-0 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-sans text-xs font-bold px-3.5 py-2 rounded-xl transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed"
+              >
+                {isGeneratingCity ? (
+                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Plus className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {isGeneratingCity
+                    ? (lang === 'zh' ? '正在写入...' : 'Writing...')
+                    : (lang === 'zh' ? '解析并写入' : 'Generate & Write')}
+                </span>
+              </button>
+            </div>
+          )}
+
           {/* Popular Departure Selection Row */}
           <div>
             <h4 className="font-sans font-bold text-slate-400 text-xs tracking-wider uppercase mb-3">
@@ -385,6 +467,36 @@ export default function CitySelector({
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {searchQuery.trim().length >= 2 && !isSearchingOnline && (
+            <div className="bg-gradient-to-r from-blue-50/60 to-indigo-50/60 border border-blue-100 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm animate-fade-in mt-1 mb-2">
+              <div className="flex items-center gap-2.5 text-slate-700 text-left">
+                <Sparkles className="w-4 h-4 text-blue-600 shrink-0 animate-pulse" />
+                <span className="text-xs">
+                  {lang === 'zh'
+                    ? `没在列表中看到所需城市？让 AI 实时解析并写入新城市 "${searchQuery}"`
+                    : `Don't see it? Ask AI to dynamically parse & write "${searchQuery}"`}
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={isGeneratingCity}
+                onClick={() => handleGenerateAndWriteCity(searchQuery, 'destination')}
+                className="shrink-0 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-sans text-xs font-bold px-3.5 py-2 rounded-xl transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed"
+              >
+                {isGeneratingCity ? (
+                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Plus className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {isGeneratingCity
+                    ? (lang === 'zh' ? '正在写入...' : 'Writing...')
+                    : (lang === 'zh' ? '解析并写入' : 'Generate & Write')}
+                </span>
+              </button>
             </div>
           )}
 

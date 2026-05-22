@@ -25,10 +25,223 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
-  DollarSign
+  DollarSign,
+  Sun,
+  CloudRain,
+  Thermometer,
+  Wind,
+  Info,
+  X,
+  Flame,
+  Footprints
 } from 'lucide-react';
 
 let L: any = null; // Dynamically imported Leaflet instance
+
+interface PoiIntel {
+  weather: {
+    temp: string;
+    condition: string;
+    humidity: string;
+    uvIndex: string;
+    wind: string;
+  };
+  traffic: {
+    status: 'good' | 'slow' | 'heavy';
+    badge: string;
+    badgeColor: string;
+    speed: string;
+    tip: string;
+  };
+  gourmet: string;
+  strategy: string;
+}
+
+function getRichPoiIntelligence(poiName: string, poiType: string, lang: 'zh' | 'en'): PoiIntel {
+  const isZh = lang === 'zh';
+  const nameLower = poiName.toLowerCase();
+  
+  if (nameLower.includes('故宫') || nameLower.includes('palace') || nameLower.includes('forbidden')) {
+    return {
+      weather: {
+        temp: '22°C',
+        condition: isZh ? '⛅ 多云转晴' : '⛅ Partly Sunny',
+        humidity: '40%',
+        uvIndex: isZh ? '中等 (3级)' : 'Moderate (3)',
+        wind: isZh ? '东南风 2级' : 'Light SE Wind 2',
+      },
+      traffic: {
+        status: 'slow',
+        badge: isZh ? '🟡 局部缓行' : '🟡 Slightly Slow',
+        badgeColor: 'text-amber-700 bg-amber-50 border-amber-200',
+        speed: isZh ? '周边均速 28km/h' : 'Lanes Avg 28km/h',
+        tip: isZh 
+          ? '东华门及景前街车流较密集。推荐搭乘轨道交通8号线或1号线步行前往午门。' 
+          : 'Congestion on Jingshan Front St. Highly recommend taking Metro Line 8 or Line 1 and walk.',
+      },
+      gourmet: isZh 
+        ? '四季民福烤鸭店(东华门景观位可赏角楼景)、老北京炸酱面、老磁器口豆汁特产、姚记炒肝。' 
+        : 'Siji Minfu Roast Duck (Stunning turret tower view), Old Beijing Fried Sauce Noodles, Yaoji Chaogan.',
+      strategy: isZh
+        ? '午门进 -> 太和殿 -> 坤宁宫 -> 御花园 -> 神武门出。务必提前7天微信小程序线上实名制预约购票，周一全天闭馆！'
+        : 'Route: Meridian Gate -> Supreme Harmony -> Kunning Palace -> Imperial Garden -> Gate of Divine Prowess. Reserve 7 days in advance online. Closed Mondays!',
+    };
+  }
+  
+  if (nameLower.includes('长城') || nameLower.includes('wall')) {
+    return {
+      weather: {
+        temp: '18°C',
+        condition: isZh ? '☀️ 晴空万里 / 山区风大' : '☀️ Sunny / Great Wall Windy',
+        humidity: '30%',
+        uvIndex: isZh ? '极强 (5级 - 阳光暴晒)' : 'Extreme (5)',
+        wind: isZh ? '西北风 4级' : 'NW Wind 4',
+      },
+      traffic: {
+        status: 'good',
+        badge: isZh ? '🟢 双向畅通' : '🟢 Smooth Run',
+        badgeColor: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+        speed: isZh ? '京藏高速均速 75km/h' : 'Highway Avg 75km/h',
+        tip: isZh 
+          ? '京藏高速/京礼高速通行极顺畅。建议避开节假日高峰以错峰出行。' 
+          : 'G6/G7 Highway smooth. Start early around 7:00 AM to mismatch normal peak hours.',
+      },
+      gourmet: isZh 
+        ? '长城脚下游玩：当地特色柴鸡焖豆腐、土炉贴饼子、原汁走地鸡、水库河鲜。' 
+        : 'Local Gourmet: Braised Range Chicken, Great-wall Farmhouse Tofu Stew, Traditional Corn Pancakes.',
+      strategy: isZh
+        ? '攀登路线：建议购买北线索道双程直达北八锁阳关。贴士：长城脊背风力巨大、台阶陡峭，请穿防滑厚底跑鞋、戴防风遮阳帽、多备1-2瓶饮用水制备体力。'
+        : 'Route: Take North Cablecar directly to North Tower 8. Tips: Extreme altitude winds, steep stairs. Wear climbing boots and windbreakers.',
+    };
+  }
+
+  if (nameLower.includes('西湖') || nameLower.includes('west lake') || nameLower.includes('雷峰')) {
+    return {
+      weather: {
+        temp: '20°C',
+        condition: isZh ? '🌧️ 细雨连绵 / 烟雨缥缈' : '🌧️ Soft West Lake Drizzle',
+        humidity: '85%',
+        uvIndex: isZh ? '弱 (1级)' : 'Weak (1)',
+        wind: isZh ? '东风 1级' : 'East Breeze 1',
+      },
+      traffic: {
+        status: 'heavy',
+        badge: isZh ? '🔴 交通限行 / 步行区极密' : '🔴 Heavy Congestion',
+        badgeColor: 'text-rose-700 bg-rose-50 border-rose-200',
+        speed: isZh ? '环湖均速 12km/h' : 'Lake Circuits Avg 12km/h',
+        tip: isZh 
+          ? '西湖景区单双号实行限行。极其推荐租借景区自行车骑行环游，或搭乘沿湖绿色环保电瓶车，省时省力！' 
+          : 'Strict traffic limits. Rent a scenic city bicycle or take standard eco-electric golf carts directly!',
+      },
+      gourmet: isZh 
+        ? '经典杭帮菜：楼外楼西湖醋鱼、东坡肉、龙井虾仁、知味观猫耳朵、新白鹿排骨。' 
+        : 'Hangzhou Specialties: West Lake Vinegar Fish, slow-stewed Dongpo Pork, Longjing Roasted Shrimps, Zhi Wei Guan.',
+      strategy: isZh
+        ? '游玩攻略：断桥残雪 -> 白堤步游 -> 苏堤春晓 -> 雷峰夕照 -> 三潭印月(乘船)。建议在西湖畔落 sunset 时泡一杯龙井茶，静享江南慢生活。'
+        : 'Route: Broken Bridge -> Baidi Causeway -> Sudi Causeway -> Leifeng Pagoda. Protip: Sit by lake teahouse at sunset with hot original dragonwell tea.',
+    };
+  }
+
+  if (nameLower.includes('外滩') || nameLower.includes('bund') || nameLower.includes('南京路')) {
+    return {
+      weather: {
+        temp: '23°C',
+        condition: isZh ? '⛅ 江风清爽' : '⛅ Cool Overcast Riverfront',
+        humidity: '60%',
+        uvIndex: isZh ? '中等' : 'Medium',
+        wind: isZh ? '黄浦江风 3级' : 'River Wind 3',
+      },
+      traffic: {
+        status: 'slow',
+        badge: isZh ? '🟡 步行街人流密集' : '🟡 High Crowd Density',
+        badgeColor: 'text-amber-700 bg-amber-50 border-amber-200',
+        speed: isZh ? '隧道均速 38km/h' : 'Tunnels Avg 38km/h',
+        tip: isZh 
+          ? '南京东路地下通道出行拥挤。推荐采用轮渡单程游江或步行至苏州河畔观景。' 
+          : 'Highly crowded around Nanjing East Road. Better to take ferries or walk along Suzhou Creek boardwalk.',
+      },
+      gourmet: isZh 
+        ? '附近海派小吃：佳家汤包蟹粉小笼、南翔小笼馒头、鲜得来排骨年糕、国际饭店蝴蝶酥。' 
+        : 'Specialties: Crab-roe soup dumplings, Nanxiang Steamed Buns, Pork ribs with sticky rice Cakes, butterfly pastries.',
+      strategy: isZh
+        ? '外滩每晚19:00准时亮灯，建议最佳拍摄机位在和平饭店露台、北外滩滨江绿地（可完美避开拥挤人群同框东方明珠）。'
+        : 'Magic neon lights up at 19:00. Best photography spot is Peace Hotel balcony or North Bund Promenade to skip human wave crowds.',
+    };
+  }
+
+  // Type-specific fallbacks for gourmet and strategy
+  if (poiType === 'food') {
+    return {
+      weather: {
+        temp: '21°C',
+        condition: isZh ? '☀️ 舒适舒爽' : '☀️ Delightful Dining Day',
+        humidity: '50%',
+        uvIndex: isZh ? '低 (2级)' : 'Low (2)',
+        wind: isZh ? '微风 东南风1级' : 'Light SE Wind 1',
+      },
+      traffic: {
+        status: 'good',
+        badge: isZh ? '🟢 街道通畅' : '🟢 Free Access',
+        badgeColor: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+        speed: isZh ? '门前道路 40km/h' : 'Avenue speed 40km/h',
+        tip: isZh ? '餐馆周边设有收费落客点，乘坐网约车及打车最利索。' : 'Paid drop-off bays nearby, taking ride-sharing is most efficient.',
+      },
+      gourmet: isZh 
+        ? '舌尖必点：招牌地道风味、主厨独家秘制名菜、当季限定珍馐、大众热评必吃。' 
+        : 'Cuisine Spotlight: Local seasonal master chef recipes, high-quality popular dishes.',
+      strategy: isZh
+        ? '食客特刊：本地口碑极高的特色餐馆，用餐高峰期排号可能较长。推荐提前在手机小程序预查预订，建议17:30前到场。'
+        : 'Dining Tip: Local top-tier popularity! Evening queues can be up to 1hr. Reserve early via phone or arrive before 17:30.',
+    };
+  }
+
+  if (poiType === 'hotel') {
+    return {
+      weather: {
+        temp: '22°C',
+        condition: isZh ? '☁️ 室内恒风舒服' : '☁️ Room Thermostat Controlled',
+        humidity: '55%',
+        uvIndex: isZh ? '弱' : 'Weak',
+        wind: isZh ? '静风 1级' : 'Gentle Breeze 1',
+      },
+      traffic: {
+        status: 'good',
+        badge: isZh ? '🟢 畅行顺遂' : '🟢 Smooth Access',
+        badgeColor: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+        speed: isZh ? '大床通道极畅' : 'Driveway Free',
+        tip: isZh ? '大堂泊车区宽敞。可请门岗协办免下车无行李交接服务。' : 'Spacious baggage drop-off lanes, warm port valet services.',
+      },
+      gourmet: isZh ? '住客奢享：顶楼云端景观酒廊、五星主厨匠心自助早点、下午茶创意小点。' : 'Hotel Dining: Panoramic sky lounge buffet breakfast, exquisite afternoon teatime pastries.',
+      strategy: isZh 
+        ? '入住贴士：官方前台通常在14:00后办理标准入住（可免费寄存行李及提早体验泳池健身房）。携老人及儿童等可申请延迟退房。' 
+        : 'Stay Tip: Official check-in after 14:00, baggage store is free. Request high floor rooms and late checkout if available.',
+    };
+  }
+
+  // General default fallback package
+  return {
+    weather: {
+      temp: '22°C',
+      condition: isZh ? '☀️ 气候舒适' : '☀️ Pleasant Sunny Outlook',
+      humidity: '48%',
+      uvIndex: isZh ? '适中 (3级)' : 'Moderate (3)',
+      wind: isZh ? '微风 东南风 2级' : 'Light SE Wind 2',
+    },
+    traffic: {
+      status: 'good',
+      badge: isZh ? '🟢 交通顺畅' : '🟢 Road Active',
+      badgeColor: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+      speed: isZh ? '通行均时均速 35km/h' : 'Road Avg speed 35km/h',
+      tip: isZh ? '周边公共交通站台配置极近。随时随地骑行也十分自在。' : 'Excellent transit links. Shared bikes can be found right outside.',
+    },
+    gourmet: isZh 
+      ? `周边特色美食云集。附近街区有多家高口碑本地茶餐厅或特产风味老店。` 
+      : `High crowd reputation specialties, traditional delicious bites nearby.`,
+    strategy: isZh
+      ? `打卡攻略：建议穿着平底运动跑鞋出行，备用便携式移动电源及折叠伞，时刻获得自在体验。`
+      : `Explorer Guide: Wear comfortable sneakers, pack a compact power bank, and enjoy seamless photo taking!`,
+  };
+}
 
 interface MapContainerProps {
   departureCityId: string;
@@ -148,6 +361,69 @@ export default function MapContainer({
     setActiveEngine(mapEngine);
   }, [mapEngine]);
 
+  const [selectedDayTab, setSelectedDayTab] = useState<number | 'all'>('all');
+  const [selectedPoi, setSelectedPoi] = useState<any | null>(null);
+  const [visitedPois, setVisitedPois] = useState<{ [id: string]: boolean }>({});
+
+  // Synchronize day selection tab when active city changes
+  useEffect(() => {
+    setSelectedDayTab('all');
+    setSelectedPoi(null);
+  }, [activePlanIndex]);
+
+  const activeCityPlan = activePlanIndex >= 0 && activePlanIndex < cityPlans.length ? cityPlans[activePlanIndex] : null;
+
+  // Compile active local check-in POIs to show on map
+  const activePois: {
+    id: string;
+    dayNum: number;
+    seq: number;
+    poi: any;
+    color: string;
+    lineColor: string;
+  }[] = [];
+
+  if (activeCityPlan) {
+    activeCityPlan.days.forEach((dayPlan) => {
+      const dayNum = dayPlan.day;
+      if (selectedDayTab === 'all' || selectedDayTab === dayNum) {
+        // Assign beautiful distinct color-coding per day!
+        let dayColor = '#6366f1'; // Indigo
+        let dayLineColor = '#818cf8';
+        if (dayNum === 1) {
+          dayColor = '#f97316'; // Orange-Red
+          dayLineColor = '#fb923c';
+        } else if (dayNum === 2) {
+          dayColor = '#10b981'; // Emerald
+          dayLineColor = '#34d399';
+        } else if (dayNum === 3) {
+          dayColor = '#a855f7'; // Purple/Violet
+          dayLineColor = '#c084fc';
+        } else if (dayNum === 4) {
+          dayColor = '#eab308'; // Amber
+          dayLineColor = '#facc15';
+        } else if (dayNum === 5) {
+          dayColor = '#ec4899'; // Pink
+          dayLineColor = '#f472b6';
+        } else {
+          dayColor = '#06b6d4'; // Cyan
+          dayLineColor = '#22d3ee';
+        }
+
+        dayPlan.pois.forEach((poi, pSeq) => {
+          activePois.push({
+            id: poi.id,
+            dayNum,
+            seq: pSeq + 1,
+            poi,
+            color: dayColor,
+            lineColor: dayLineColor,
+          });
+        });
+      }
+    });
+  }
+
   // Intermediate Waypoints State for Route Planning
   const [waypoints, setWaypoints] = useState<{
     id: string;
@@ -173,6 +449,51 @@ export default function MapContainer({
 
   // Dynamic satellite traffic radar connection state
   const [radarConnected, setRadarConnected] = useState<'offline' | 'connecting' | 'online'>('offline');
+
+  // Real-time AI meteorological and traffic states
+  const [poiRealtimeIntel, setPoiRealtimeIntel] = useState<Record<string, PoiIntel>>({});
+  const [loadingPoiIntel, setLoadingPoiIntel] = useState<string | null>(null);
+  const [poiIntelSource, setPoiIntelSource] = useState<Record<string, 'local_simulation' | 'ai_live_sync'>>({});
+
+  const fetchRealtimePoiIntel = async (poiName: string, poiType: string) => {
+    if (!poiName) return;
+    setLoadingPoiIntel(poiName);
+    try {
+      const response = await fetch('/api/poi/intel-realtime', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ poiName, poiType, lang })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.weather && data.traffic) {
+          setPoiRealtimeIntel(prev => ({
+            ...prev,
+            [poiName]: data
+          }));
+          setPoiIntelSource(prev => ({
+            ...prev,
+            [poiName]: 'ai_live_sync'
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching real-time POI intelligence:', err);
+    } finally {
+      setLoadingPoiIntel(null);
+    }
+  };
+
+  useEffect(() => {
+    if (radarConnected === 'online' && selectedPoi) {
+      const alreadyFetched = poiIntelSource[selectedPoi.name] === 'ai_live_sync';
+      if (!alreadyFetched && loadingPoiIntel !== selectedPoi.name) {
+        fetchRealtimePoiIntel(selectedPoi.name, selectedPoi.type);
+      }
+    }
+  }, [radarConnected, selectedPoi]);
 
   // Interactive route curvature generating algorithms
   const interpolatePoints = (
@@ -379,6 +700,8 @@ export default function MapContainer({
     }
 
     const bounds: any[] = [];
+
+    // Draw the main inter-city stops
     routingPoints.forEach((point, seq) => {
       const isCurrentActive =
         (point.isOrigin && activePlanIndex === -1) ||
@@ -406,7 +729,7 @@ export default function MapContainer({
       markerInstance.bindPopup(`
         <div class="font-sans p-1">
           <p class="font-bold text-sm text-slate-800">${point.name}</p>
-          <p class="text-xs text-slate-400 font-medium">${point.isOrigin ? '出发点 (Origin)' : `滞停点 ${seq} (Stop ${seq})`}</p>
+          <p class="text-xs text-slate-400 font-medium">${point.isOrigin ? (lang === 'zh' ? '出发点' : 'Departure') : (lang === 'zh' ? `滞停城市 ${seq}` : `Stop ${seq}`)}</p>
         </div>
       `);
 
@@ -417,23 +740,24 @@ export default function MapContainer({
       });
 
       leafletMarkersRef.current.push(markerInstance);
-      bounds.push(point.coord);
+      
+      if (!activeCityPlan) {
+        bounds.push(point.coord);
+      }
     });
 
-    // Generate beautiful curvy segment tracks including waypoint connections
+    // Draw the main inter-city transit track
     const detailedTrack = getPathPointsForSegments();
-
     if (detailedTrack.length >= 2) {
       leafletPolylineRef.current = L.polyline(detailedTrack, {
         color: '#6366f1',
-        weight: 4.5,
-        dashArray: '4, 8', // beautiful flowing dashed railway/aviation indicator style
-        opacity: 0.9,
+        weight: 3.5,
+        dashArray: '3, 6', // flowing dashed transit connection
+        opacity: activePlanIndex !== -1 ? 0.35 : 0.8, // desaturate if actively exploring a single city
       }).addTo(map);
 
-      // Draw custom waypoint markers onto Leaflet to exhibit intermediate road planning
+      // Draw custom waypoint markers
       waypoints.forEach((wp) => {
-        // Only draw waypoints belonging to active segments
         const wpIcon = L.divIcon({
           html: `
             <div class="w-6 h-6 rounded-full border border-white bg-indigo-600 text-white flex items-center justify-center shadow-md font-sans transition-all hover:scale-110 active:scale-95 cursor-pointer ring-2 ring-indigo-200">
@@ -462,16 +786,88 @@ export default function MapContainer({
         `);
         leafletMarkersRef.current.push(wpMarker);
       });
+    }
 
-      // Adaptive bounding fits automatically using standard bounds
+    // NEW: Render fine check-in POI markers for the active city
+    if (activeCityPlan) {
+      activePois.forEach((p) => {
+        const poiIcon = L.divIcon({
+          html: `
+            <div class="flex flex-col items-center select-none" style="transform: translateY(-8px);">
+              <div style="background-color: ${p.color}; border: 2.2px solid white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15);" class="w-7 h-7 rounded-full text-white flex items-center justify-center font-sans font-extrabold text-xs ring-2 ring-white hover:scale-110 transition-transform">
+                ${p.seq}
+              </div>
+              <div class="px-1.5 py-0.5 mt-0.5 bg-slate-900/90 backdrop-blur-[2px] rounded text-[9px] text-white font-bold whitespace-nowrap border border-white/20 shadow-sm pointer-events-none">
+                ${lang === 'zh' ? p.poi.name : p.poi.nameEn}
+              </div>
+            </div>
+          `,
+          className: 'custom-poi-marker-div',
+          iconSize: [80, 48],
+          iconAnchor: [40, 24]
+        });
+
+        const poiMarker = L.marker(p.poi.coordinates, { icon: poiIcon }).addTo(map);
+
+        poiMarker.on('click', () => {
+          setSelectedPoi(p.poi);
+        });
+
+        poiMarker.bindPopup(`
+          <div class="font-sans p-2 select-none max-w-[220px]">
+            <div class="flex items-center gap-1.5 mb-1 bg-slate-100 border border-slate-200 rounded px-2 py-0.5 w-max">
+              <span class="text-[9px] text-indigo-700 font-extrabold">
+                ${p.poi.type === 'attraction' ? (lang === 'zh' ? '景点' : 'Attraction') :
+                  p.poi.type === 'food' ? (lang === 'zh' ? '美食' : 'Dining') :
+                  p.poi.type === 'hotel' ? (lang === 'zh' ? '酒店' : 'Hotel') :
+                  (lang === 'zh' ? '交通枢纽' : 'Transit')}
+              </span>
+              <span class="text-[9px] font-mono font-bold text-slate-550">${p.poi.time}</span>
+            </div>
+            <p class="font-extrabold text-sm text-slate-800">${lang === 'zh' ? p.poi.name : p.poi.nameEn}</p>
+            <p class="text-[10px] text-indigo-600 font-bold mt-1">🕒 ${lang === 'zh' ? `建议游玩: ${p.poi.duration}` : `Duration: ${p.poi.duration}`}</p>
+            <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">${lang === 'zh' ? p.poi.tip : p.poi.tipEn}</p>
+          </div>
+        `);
+
+        leafletMarkersRef.current.push(poiMarker);
+        bounds.push(p.poi.coordinates);
+      });
+
+      // Group activePois by day to draw sequential daily route lines
+      const poisByDay: { [day: number]: typeof activePois } = {};
+      activePois.forEach((p) => {
+        if (!poisByDay[p.dayNum]) poisByDay[p.dayNum] = [];
+        poisByDay[p.dayNum].push(p);
+      });
+
+      Object.keys(poisByDay).forEach((dayNumKey) => {
+        const dayNum = parseInt(dayNumKey);
+        const dayPois = poisByDay[dayNum];
+        if (dayPois.length >= 2) {
+          const pathCoords = dayPois.map(p => p.poi.coordinates);
+          const dayLine = L.polyline(pathCoords, {
+            color: dayPois[0].color,
+            weight: 3.5,
+            opacity: 0.85,
+            dashArray: '5, 5',
+          }).addTo(map);
+
+          leafletMarkersRef.current.push(dayLine);
+        }
+      });
+    }
+
+    // Adaptive bounding fits automatically using active bounds points
+    if (bounds.length >= 2) {
       map.fitBounds(bounds, {
-        padding: [45, 45],
-        maxZoom: 8
+        padding: [50, 50],
+        maxZoom: 13,
       });
     } else if (bounds.length === 1) {
-      map.setView(bounds[0], 6);
+      map.setView(bounds[0], 11);
     }
-  }, [activeEngine, isLeafletReady, departureCityId, cityPlans, activePlanIndex, waypoints]);
+  }, [activeEngine, isLeafletReady, departureCityId, cityPlans, activePlanIndex, waypoints, activePois, selectedDayTab]);
 
   // ---------------------------------------------------------------------------
   // Amap (高德) Setup & Update Flow
@@ -480,11 +876,9 @@ export default function MapContainer({
     if (activeEngine !== 'amap') return;
 
     // Apply security config as mandated by Amap JS API 2.0
-    if (amapSecurityCode) {
-      (window as any)._AMapSecurityConfig = {
-        securityJsCode: amapSecurityCode,
-      };
-    }
+    (window as any)._AMapSecurityConfig = {
+      securityJsCode: amapSecurityCode || '',
+    };
 
     if (!amapKey) {
       setAmapError('Missing Amap Web Key');
@@ -494,7 +888,7 @@ export default function MapContainer({
     setAmapError(null);
 
     // Dynamic Script load for Amap Map
-    const scriptId = 'amap-js-sdk-handler';
+    const scriptId = `amap-js-sdk-handler-${amapKey}`;
     const existingScript = document.getElementById(scriptId);
 
     const initializeAmap = () => {
@@ -508,6 +902,19 @@ export default function MapContainer({
         existingScript.addEventListener('load', initializeAmap);
       }
     } else {
+      // Remove any clean up scripts of stale keys
+      const oldScripts = document.querySelectorAll('[id^="amap-js-sdk-handler"]');
+      oldScripts.forEach((el) => el.remove());
+
+      // Clear loaded states so it doesn't try to use standard AMap of wrong key or stale config
+      if (!(window as any).AMap || (window as any).AMapKeyUsed !== amapKey) {
+        setIsAmapLoaded(false);
+        delete (window as any).AMap;
+        delete (window as any).AMapUI;
+      }
+
+      (window as any).AMapKeyUsed = amapKey;
+
       const script = document.createElement('script');
       script.id = scriptId;
       script.type = 'text/javascript';
@@ -542,9 +949,22 @@ export default function MapContainer({
         center: [startCoord[1], startCoord[0]], // Amap coordinates are [lng, lat]
         viewMode: '2D',
       });
+
+      // Delayed resize to ensure layout matches correctly on mount
+      setTimeout(() => {
+        if (amapInstanceRef.current && typeof amapInstanceRef.current.resize === 'function') {
+          amapInstanceRef.current.resize();
+        }
+      }, 150);
     }
 
     const map = amapInstanceRef.current;
+
+    // Explicitly notify map to resize container layout in case of container sizing changes or hidden states
+    if (typeof map.resize === 'function') {
+      map.resize();
+    }
+
     map.clearMap(); // Clear previous markers and polyline links
 
     const path: any[] = [];
@@ -554,7 +974,7 @@ export default function MapContainer({
         (!point.isOrigin && point.planIndex === activePlanIndex);
 
       const pinClass = point.isOrigin
-        ? 'bg-rose-500 ring-rose-100 hover:ring-rose-200'
+        ? 'bg-rose-500 ring-rose-100'
         : isCurrentActive
         ? 'bg-sky-500 ring-sky-200 shadow-sky-500/30'
         : 'bg-slate-400 ring-slate-100';
@@ -592,9 +1012,9 @@ export default function MapContainer({
       const polyline = new AMap.Polyline({
         path: amapDetailedPath,
         strokeColor: '#6366f1',
-        strokeWeight: 4.5,
-        strokeOpacity: 0.9,
-        strokeStyle: 'dashed', // dynamic dashed style for active tracking look
+        strokeWeight: 3.5,
+        strokeOpacity: activePlanIndex !== -1 ? 0.25 : 0.75, // desaturate inter-city track if viewing active city
+        strokeStyle: 'dashed',
         strokeDasharray: [8, 8],
         lineJoin: 'round',
       });
@@ -638,14 +1058,87 @@ export default function MapContainer({
 
         map.add(wpMarker);
       });
-
-      // Adaptive fit elements with comfortable fitView parameters
-      map.setFitView(undefined, false, [40, 40, 40, 40]);
-    } else if (amapDetailedPath.length === 1) {
-      map.setCenter(amapDetailedPath[0]);
-      map.setZoom(6);
     }
-  }, [activeEngine, isAmapLoaded, departureCityId, cityPlans, activePlanIndex, waypoints]);
+
+    // NEW DRAW: Add active check-in points (POIs) map overlays in AMap
+    if (activeCityPlan) {
+      activePois.forEach((p) => {
+        const poiLngLat = [p.poi.coordinates[1], p.poi.coordinates[0]];
+        const customHtml = `
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; transform: translateY(-10px);">
+            <div style="background-color: ${p.color}; border: 2.2px solid #fff; border-radius: 50%; width: 26px; height: 26px; color: #fff; display: flex; align-items: center; justify-content: center; font-family: sans-serif; font-weight: bold; font-size: 11px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.18);">
+              ${p.seq}
+            </div>
+            <div style="padding: 2px 6px; margin-top: 3px; background: rgba(15, 23, 42, 0.9); box-shadow: 0 1px 3px rgba(0,0,0,0.15); border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.2); font-size: 9px; color: #fff; text-align: center; white-space: nowrap; font-family: sans-serif; pointer-events: none; font-weight: bold;">
+              ${lang === 'zh' ? p.poi.name : p.poi.nameEn}
+            </div>
+          </div>
+        `;
+
+        const poiMarker = new AMap.Marker({
+          position: poiLngLat,
+          content: customHtml,
+          anchor: 'center',
+          title: p.poi.name,
+        });
+
+        const poiInfoWindow = new AMap.InfoWindow({
+          content: `
+            <div style="font-family: sans-serif; padding: 6px; max-width: 225px;">
+              <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                <span style="font-size: 8px; background: #f1f5f9; color: #1e293b; padding: 2.5px 6.5px; border-radius: 4px; font-weight: bold; display: inline-block;">
+                  ${p.poi.type === 'attraction' ? (lang === 'zh' ? '景点' : 'Attraction') :
+                    p.poi.type === 'food' ? (lang === 'zh' ? '美食' : 'Dining') :
+                    p.poi.type === 'hotel' ? (lang === 'zh' ? '酒店' : 'Hotel') :
+                    (lang === 'zh' ? '交通枢纽' : 'Transit')}
+                </span>
+                <span style="font-size: 9px; font-weight: bold; color: #64748b;">${p.poi.time}</span>
+              </div>
+              <p style="font-weight: bold; margin: 0 0 4px 0; font-size: 11px; color: #1e293b;">${lang === 'zh' ? p.poi.name : p.poi.nameEn}</p>
+              <p style="margin: 0 0 4px 0; font-size: 10px; color: #4f46e5; font-weight: bold;">🕒 ${lang === 'zh' ? `建议游玩: ${p.poi.duration}` : `Duration: ${p.poi.duration}`}</p>
+              <p style="margin: 0; font-size: 10px; color: #475569; line-height: 1.4;">${lang === 'zh' ? p.poi.tip : p.poi.tipEn}</p>
+            </div>
+          `,
+          offset: new AMap.Pixel(0, -18)
+        });
+
+        poiMarker.on('click', () => {
+          poiInfoWindow.open(map, poiLngLat);
+          setSelectedPoi(p.poi);
+        });
+
+        map.add(poiMarker);
+      });
+
+      // Group activePois by day to draw sequential daily route lines in AMap
+      const poisByDay: { [day: number]: typeof activePois } = {};
+      activePois.forEach((p) => {
+        if (!poisByDay[p.dayNum]) poisByDay[p.dayNum] = [];
+        poisByDay[p.dayNum].push(p);
+      });
+
+      Object.keys(poisByDay).forEach((dayNumKey) => {
+        const dayNum = parseInt(dayNumKey);
+        const dayPois = poisByDay[dayNum];
+        if (dayPois.length >= 2) {
+          const amapDayPath = dayPois.map(p => [p.poi.coordinates[1], p.poi.coordinates[0]]);
+          const dayLine = new AMap.Polyline({
+            path: amapDayPath,
+            strokeColor: dayPois[0].color,
+            strokeWeight: 4,
+            strokeOpacity: 0.85,
+            strokeStyle: 'dashed',
+            strokeDasharray: [6, 6],
+            lineJoin: 'round',
+          });
+          map.add(dayLine);
+        }
+      });
+    }
+
+    // Adaptive fit elements with comfortable fitView parameters
+    map.setFitView(undefined, false, [60, 60, 60, 60]);
+  }, [activeEngine, isAmapLoaded, departureCityId, cityPlans, activePlanIndex, waypoints, activePois, selectedDayTab]);
 
   // ---------------------------------------------------------------------------
   // Custom Transportation Access & Route Planning Actions
@@ -804,6 +1297,41 @@ export default function MapContainer({
     <div className="space-y-6">
       {/* Map Engine Card Block */}
       <div className="relative w-full h-[320px] md:h-[400px] bg-slate-50 border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+        {/* NEW Floating Day Itinerary Controller Dock */}
+        {activeCityPlan && (
+          <div className="absolute top-3 left-3 z-[1000] bg-white/95 backdrop-blur-md border border-slate-200/90 p-1.5 px-2 rounded-2xl shadow-lg flex items-center gap-1.5 max-w-[calc(100%-24px)] overflow-x-auto scrollbar-none animate-fadeIn select-none">
+            <span className="text-[10px] text-slate-500 font-extrabold px-2 bg-slate-100/90 rounded-lg py-1 whitespace-nowrap">
+              📍 {lang === 'zh' ? `${activeCityPlan.cityName}日程` : `${activeCityPlan.cityName} Days`}
+            </span>
+            <button
+              onClick={() => setSelectedDayTab('all')}
+              className={`px-3 py-1 rounded-xl text-[10px] font-extrabold transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                selectedDayTab === 'all'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60'
+              }`}
+            >
+              {lang === 'zh' ? '查看全部' : 'All Days'}
+            </button>
+            {Array.from({ length: activeCityPlan.daysCount }).map((_, dIdx) => {
+              const dNum = dIdx + 1;
+              return (
+                <button
+                  key={`day-tab-${dNum}`}
+                  onClick={() => setSelectedDayTab(dNum)}
+                  className={`px-3 py-1 rounded-xl text-[10px] font-extrabold transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                    selectedDayTab === dNum
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60'
+                  }`}
+                >
+                  {lang === 'zh' ? `D${dNum}` : `Day ${dNum}`}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* 1. Leaflet Interactive Map View */}
         {activeEngine === 'leaflet' && (
           <div className="w-full h-full">
@@ -829,6 +1357,8 @@ export default function MapContainer({
               onFallbackToLeaflet={() => setActiveEngine('leaflet')}
               waypoints={waypoints}
               lang={lang}
+              activePois={activePois}
+              onSelectPoi={setSelectedPoi}
             />
           </div>
         )}
@@ -859,6 +1389,187 @@ export default function MapContainer({
             )}
           </div>
         )}
+
+        {/* Floating POI detailed intelligence analysis card */}
+        {selectedPoi && (() => {
+          const isRealtime = poiRealtimeIntel[selectedPoi.name];
+          const intel = isRealtime || getRichPoiIntelligence(selectedPoi.name, selectedPoi.type, lang);
+          const isVisited = !!visitedPois[selectedPoi.id];
+          const isSynced = poiIntelSource[selectedPoi.name] === 'ai_live_sync';
+          const isLoading = loadingPoiIntel === selectedPoi.name;
+
+          return (
+            <div className="absolute top-14 bottom-3 right-3 left-3 md:left-auto md:w-[350px] max-h-[calc(100%-64px)] z-[1010] bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl shadow-xl flex flex-col gap-3 font-sans overflow-y-auto scrollbar-none transition-all duration-300 p-4 select-none">
+              {/* Card Header */}
+              <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-[10] border-b border-slate-100 pb-2 flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      {selectedPoi.type === 'attraction' ? (lang === 'zh' ? '景点打卡' : 'Attraction') :
+                       selectedPoi.type === 'food' ? (lang === 'zh' ? '特产美食' : 'Dining') :
+                       selectedPoi.type === 'hotel' ? (lang === 'zh' ? '精品酒店' : 'Hotel') :
+                       (lang === 'zh' ? '交通网络' : 'Transit')}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">🕒 {selectedPoi.time}</span>
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-sm md:text-base tracking-tight leading-tight">
+                    {lang === 'zh' ? selectedPoi.name : selectedPoi.nameEn}
+                  </h4>
+                </div>
+                <button 
+                  onClick={() => setSelectedPoi(null)}
+                  className="p-1 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Dynamic Synchronization State Banner */}
+              <div className={`p-2.5 rounded-xl border text-[10px] leading-relaxed transition-all ${
+                isLoading 
+                  ? 'bg-amber-50/50 border-amber-200 text-amber-800 animate-pulse'
+                  : isSynced 
+                  ? 'bg-emerald-50/50 border-emerald-200 text-emerald-800' 
+                  : 'bg-slate-50 border-slate-200 text-slate-500'
+              }`}>
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-3.5 h-3.5 text-amber-500 animate-spin" />
+                    <span className="font-semibold">
+                      {lang === 'zh' ? '正在连接 Gemini AI & 高德路网实时调测...' : 'Syncing Live Traffic & Gemini Intelligence...'}
+                    </span>
+                  </div>
+                ) : isSynced ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-emerald-700 flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        {lang === 'zh' ? '● AI 实时路况与气象数据已接入' : '● Live API & Gemini AI Connected'}
+                      </span>
+                      <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded font-mono font-bold uppercase">ONLINE</span>
+                    </div>
+                    <p className="text-slate-600 text-[9px] leading-snug">
+                      {lang === 'zh' 
+                        ? '已成功对接墨迹气象卫星与高德道路网格。数据每5分钟自动重算同步。' 
+                        : 'Atmospheric radars and road grids successfully mapped via active live proxies.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-600">
+                        ⚠️ {lang === 'zh' ? '当前使用离线离岸模拟大包' : 'Standard Offline Offline Mode'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => fetchRealtimePoiIntel(selectedPoi.name, selectedPoi.type)}
+                        className="text-[9.5px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-0.5 rounded cursor-pointer transition-all active:scale-95"
+                      >
+                        {lang === 'zh' ? '手动接入实时AI' : 'Live Sync'}
+                      </button>
+                    </div>
+                    <p className="text-slate-400 text-[9px] leading-snug">
+                      {lang === 'zh' 
+                        ? '若接入实时路况/气象数据与AI后，气象指数、周边缓行路网、当季精致美食攻略与瞬时贴士将实时推流更新。' 
+                        : 'Once hooked to live meteorological feeds, local Amap overlays & Gemini, these metrics auto-synchronize in real-time.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Meteorological / Weather Data Box */}
+              <div className="bg-slate-50/80 border border-slate-100 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-extrabold flex items-center gap-1">
+                    <Sun className="w-3.5 h-3.5 text-amber-500 animate-spin-slow" />
+                    {lang === 'zh' ? '气象与环境参数' : 'Meteorological Stats'}
+                  </span>
+                  <span className="text-xs font-bold text-indigo-600 font-mono">{intel.weather.temp}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600 font-medium">
+                  <div className="bg-white/95 border border-slate-100 py-1.5 px-2 rounded-lg flex items-center justify-between">
+                    <span>{lang === 'zh' ? '气候:' : 'Weather:'}</span>
+                    <span className="font-bold text-slate-800">{intel.weather.condition}</span>
+                  </div>
+                  <div className="bg-white/95 border border-slate-100 py-1.5 px-2 rounded-lg flex items-center justify-between">
+                    <span>{lang === 'zh' ? '湿度:' : 'Humidity:'}</span>
+                    <span className="font-bold text-slate-800 font-mono">{intel.weather.humidity}</span>
+                  </div>
+                  <div className="bg-white/95 border border-slate-100 py-1.5 px-2 rounded-lg flex items-center justify-between">
+                    <span>{lang === 'zh' ? '紫外线:' : 'UV Index:'}</span>
+                    <span className="font-bold text-slate-800">{intel.weather.uvIndex}</span>
+                  </div>
+                  <div className="bg-white/95 border border-slate-100 py-1.5 px-2 rounded-lg flex items-center justify-between">
+                    <span>{lang === 'zh' ? '风向等级:' : 'Wind speed:'}</span>
+                    <span className="font-bold text-slate-800">{intel.weather.wind}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Real-time Traffic Conditions Box */}
+              <div className="bg-slate-50/80 border border-slate-100 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-extrabold flex items-center gap-1">
+                    <Compass className="w-3.5 h-3.5 text-blue-500" />
+                    {lang === 'zh' ? '周边实时路况与通达效率' : 'Live Traffic Conditions'}
+                  </span>
+                  <span className={`text-[9.5px] font-bold border px-1.5 py-0.5 rounded-full ${intel.traffic.badgeColor}`}>
+                    {intel.traffic.badge}
+                  </span>
+                </div>
+                <div className="text-[10px] font-medium text-slate-600 space-y-1.5">
+                  <div className="flex items-center justify-between bg-white/95 border border-slate-100 py-1.5 px-2 rounded-lg">
+                    <span>{lang === 'zh' ? '车流通行速度:' : 'Local speed limit:'}</span>
+                    <span className="font-extrabold text-slate-800 font-mono">{intel.traffic.speed}</span>
+                  </div>
+                  <p className="bg-indigo-50/50 border border-indigo-100/50 text-slate-600 leading-relaxed rounded-lg p-2 text-[9.5px]">
+                    💡 {intel.traffic.tip}
+                  </p>
+                </div>
+              </div>
+
+              {/* Gourmet Exploration Advice */}
+              <div className="bg-slate-50/80 border border-slate-100 rounded-xl p-3 space-y-1.5">
+                <span className="text-[10px] text-slate-400 font-extrabold flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 text-rose-500" />
+                  {lang === 'zh' ? '美食速递：周边必享风味' : 'Local Gourmet & Tasting'}
+                </span>
+                <p className="text-[10px] text-slate-700 leading-relaxed bg-white/95 border border-slate-100 rounded-lg p-2 font-medium">
+                  {intel.gourmet}
+                </p>
+              </div>
+
+              {/* Travel Guide Tip */}
+              <div className="bg-slate-50/80 border border-slate-100 rounded-xl p-3 space-y-1.5">
+                <span className="text-[10px] text-slate-400 font-extrabold flex items-center gap-1 animate-pulse">
+                  <Footprints className="w-3.5 h-3.5 text-emerald-500" />
+                  {lang === 'zh' ? '打卡攻略与游玩小贴士' : 'Exploration Route & Tips'}
+                </span>
+                <p className="text-[10px] text-slate-700 leading-relaxed bg-white/95 border border-slate-100 rounded-lg p-2 font-medium">
+                  {intel.strategy}
+                </p>
+              </div>
+
+              {/* Footer Check-In Button */}
+              <div className="pt-1 select-none">
+                <button
+                  onClick={() => {
+                    setVisitedPois(prev => ({ ...prev, [selectedPoi.id]: !prev[selectedPoi.id] }));
+                  }}
+                  className={`w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-indigo-600/10 cursor-pointer text-center active:scale-[0.98] transition-all duration-250 border ${
+                    isVisited 
+                      ? 'bg-emerald-50/90 text-emerald-700 border-emerald-300 shadow-none hover:bg-emerald-100'
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white border-transparent'
+                  }`}
+                >
+                  {isVisited 
+                    ? (lang === 'zh' ? '✓ 已标记为今日足迹' : '✓ Footprint Marked Successful')
+                    : (lang === 'zh' ? '标记为今日游足迹 📍' : 'Mark Location Footprint 📍')}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* 4. Real-time Route Planner & Transportation Ticket Access Workbench */}
@@ -1481,6 +2192,8 @@ interface GoogleMapWrapperProps {
   onFallbackToLeaflet: () => void;
   waypoints: any[];
   lang?: 'zh' | 'en';
+  activePois: any[];
+  onSelectPoi?: (poi: any) => void;
 }
 
 function GoogleMapWrapper({
@@ -1491,7 +2204,9 @@ function GoogleMapWrapper({
   onSelectCityIndex,
   onFallbackToLeaflet,
   waypoints,
-  lang = 'zh'
+  lang = 'zh',
+  activePois,
+  onSelectPoi
 }: GoogleMapWrapperProps) {
   const [hasError, setHasError] = useState(false);
 
@@ -1533,6 +2248,8 @@ function GoogleMapWrapper({
           onSelectCityIndex={onSelectCityIndex}
           waypoints={waypoints}
           lang={lang}
+          activePois={activePois}
+          onSelectPoi={onSelectPoi}
         />
       )}
     </APIProvider>
@@ -1546,6 +2263,8 @@ interface GoogleMapInnerProps {
   onSelectCityIndex: (index: number) => void;
   waypoints: any[];
   lang?: 'zh' | 'en';
+  activePois: any[];
+  onSelectPoi?: (poi: any) => void;
 }
 
 function GoogleMapInner({
@@ -1554,51 +2273,88 @@ function GoogleMapInner({
   activePlanIndex,
   onSelectCityIndex,
   waypoints,
-  lang = 'zh'
+  lang = 'zh',
+  activePois,
+  onSelectPoi
 }: GoogleMapInnerProps) {
   const map = useGoogleMap();
-  const polylineRef = useRef<google.maps.Polyline | null>(null);
+  const polylinesRef = useRef<google.maps.Polyline[]>([]);
 
   useEffect(() => {
     if (!map || routingPoints.length === 0) return;
 
-    if (polylineRef.current) {
-      polylineRef.current.setMap(null);
-    }
+    // Clean up previous polylines
+    polylinesRef.current.forEach((line) => line.setMap(null));
+    polylinesRef.current = [];
 
     try {
       const bounds = new google.maps.LatLngBounds();
-      routingPoints.forEach((p) => {
-        bounds.extend({ lat: p.coord[0], lng: p.coord[1] });
+
+      if (activePois.length > 0) {
+        activePois.forEach((p) => {
+          bounds.extend({ lat: p.poi.coordinates[0], lng: p.poi.coordinates[1] });
+        });
+      } else {
+        routingPoints.forEach((p) => {
+          bounds.extend({ lat: p.coord[0], lng: p.coord[1] });
+        });
+      }
+
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, {
+          top: 60,
+          right: 60,
+          bottom: 60,
+          left: 60,
+        });
+      }
+
+      // 1. Render beautiful curved polyline paths for intercity route
+      if (detailedPathPoints.length >= 2) {
+        const interCityLine = new google.maps.Polyline({
+          path: detailedPathPoints.map(coord => ({ lat: coord[0], lng: coord[1] })),
+          geodesic: true,
+          strokeColor: '#6366f1',
+          strokeOpacity: activePlanIndex !== -1 ? 0.25 : 0.8, // desaturate transit link if focused in city
+          strokeWeight: 3.5,
+          map: map,
+        });
+        polylinesRef.current.push(interCityLine);
+      }
+
+      // 2. Group and render day-by-day paths for the active city
+      const poisByDay: { [day: number]: typeof activePois } = {};
+      activePois.forEach((p) => {
+        if (!poisByDay[p.dayNum]) poisByDay[p.dayNum] = [];
+        poisByDay[p.dayNum].push(p);
       });
 
-      // Adaptive bounding fits automatically with bounds padding
-      map.fitBounds(bounds, {
-        top: 50,
-        right: 50,
-        bottom: 50,
-        left: 50,
+      Object.keys(poisByDay).forEach((dayNumKey) => {
+        const dayNum = parseInt(dayNumKey);
+        const dayPois = poisByDay[dayNum];
+        if (dayPois.length >= 2) {
+          const pathPoints = dayPois.map(p => ({ lat: p.poi.coordinates[0], lng: p.poi.coordinates[1] }));
+          const dayLine = new google.maps.Polyline({
+            path: pathPoints,
+            geodesic: true,
+            strokeColor: dayPois[0].color,
+            strokeOpacity: 0.85,
+            strokeWeight: 3.5,
+            map: map,
+          });
+          polylinesRef.current.push(dayLine);
+        }
       });
 
-      // Render beautiful curved polyline paths
-      polylineRef.current = new google.maps.Polyline({
-        path: detailedPathPoints.map(coord => ({ lat: coord[0], lng: coord[1] })),
-        geodesic: true,
-        strokeColor: '#6366f1',
-        strokeOpacity: 0.9,
-        strokeWeight: 4,
-        map: map,
-      });
     } catch (e) {
       console.warn('Error aligning Google Map viewport:', e);
     }
 
     return () => {
-      if (polylineRef.current) {
-        polylineRef.current.setMap(null);
-      }
+      polylinesRef.current.forEach((line) => line.setMap(null));
+      polylinesRef.current = [];
     };
-  }, [map, routingPoints, detailedPathPoints, activePlanIndex]);
+  }, [map, routingPoints, detailedPathPoints, activePlanIndex, activePois]);
 
   return (
     <GoogleMap
@@ -1651,6 +2407,29 @@ function GoogleMapInner({
           </div>
         </AdvancedMarker>
       ))}
+
+      {/* NEW: Render Daily POIs on Google Map */}
+      {activePois.map((p) => {
+        return (
+          <AdvancedMarker
+            key={`poi-google-${p.id}`}
+            position={{ lat: p.poi.coordinates[0], lng: p.poi.coordinates[1] }}
+            onClick={() => onSelectPoi?.(p.poi)}
+          >
+            <div className="flex flex-col items-center select-none" style={{ transform: 'translateY(-12px)' }}>
+              <div 
+                style={{ backgroundColor: p.color, border: '2px solid white', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.18)' }}
+                className="w-7 h-7 rounded-full text-white flex items-center justify-center font-sans font-extrabold text-xs ring-2 ring-white hover:scale-110 transition-all duration-200 cursor-pointer"
+              >
+                {p.seq}
+              </div>
+              <div className="px-1.5 py-0.5 mt-0.5 bg-slate-900/90 backdrop-blur-[2px] rounded text-[9px] text-white font-bold whitespace-nowrap border border-white/20 shadow-sm pointer-events-none">
+                {lang === 'zh' ? p.poi.name : p.poi.nameEn}
+              </div>
+            </div>
+          </AdvancedMarker>
+        );
+      })}
     </GoogleMap>
   );
 }

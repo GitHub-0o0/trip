@@ -2,14 +2,15 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import {viteSingleFile} from 'vite-plugin-singlefile';
 
 export default defineConfig(() => {
   return {
-    base: './',
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), viteSingleFile()],
     define: {
       'process.env.GOOGLE_MAPS_PLATFORM_KEY': JSON.stringify(process.env.GOOGLE_MAPS_PLATFORM_KEY || ''),
-      'process.env.AMAP_KEY': JSON.stringify(process.env.AMAP_KEY || ''),
+      'process.env.AMAP_KEY': JSON.stringify(process.env.AMAP_KEY || '60a7d9ce28b99a07f485f6e9ccce4ce3'),
+      'process.env.DEEPSEEK_API_KEY': JSON.stringify(process.env.DEEPSEEK_API_KEY || ''),
     },
     resolve: {
       alias: {
@@ -25,4 +26,3 @@ export default defineConfig(() => {
     },
   };
 });
-

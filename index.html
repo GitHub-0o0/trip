@@ -5,21 +5,74 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
     <script>
-      // Early suppression of third-party script/domain authorization failures inside sandbox environments
+      // Suppression of third-party script/domain authorization and cross-origin failures inside sandbox environments
       (function() {
+        var suppressedKeywords = [
+          'script error', 
+          'invalid_user_domain', 
+          'flydataauthtask', 
+          'amap.com', 
+          'googleapis.com', 
+          'gstatic.com',
+          'extension',
+          'chrome-extension'
+        ];
+
+        function shouldSuppress(arg) {
+          if (!arg) return false;
+          try {
+            var str = '';
+            if (typeof arg === 'string') {
+              str = arg;
+            } else if (arg instanceof Error) {
+              str = (arg.message || '') + ' ' + (arg.stack || '') + ' ' + String(arg);
+            } else if (typeof arg === 'object') {
+              try {
+                str = arg.message || arg.reason || JSON.stringify(arg) || '';
+              } catch (inner) {
+                str = String(arg);
+              }
+            } else {
+              str = String(arg);
+            }
+            var lower = str.toLowerCase();
+            for (var i = 0; i < suppressedKeywords.length; i++) {
+              if (lower.indexOf(suppressedKeywords[i]) !== -1) {
+                return true;
+              }
+            }
+          } catch (e) {}
+          return false;
+        }
+
+        // Overrides console.error and console.warn to block third-party noises
+        var originalConsoleError = window.console.error;
+        window.console.error = function() {
+          for (var i = 0; i < arguments.length; i++) {
+            if (shouldSuppress(arguments[i])) {
+              return; // Suppress the whole error call if any argument is a noisy third party error
+            }
+          }
+          if (originalConsoleError) {
+            originalConsoleError.apply(window.console, arguments);
+          }
+        };
+
+        var originalConsoleWarn = window.console.warn;
+        window.console.warn = function() {
+          for (var i = 0; i < arguments.length; i++) {
+            if (shouldSuppress(arguments[i])) {
+              return;
+            }
+          }
+          if (originalConsoleWarn) {
+            originalConsoleWarn.apply(window.console, arguments);
+          }
+        };
+
         var originalOnError = window.onerror;
         window.onerror = function (message, source, lineno, colno, error) {
-          var msgStr = String(message || '');
-          var sourceStr = String(source || '');
-          if (
-            msgStr.indexOf('INVALID_USER_DOMAIN') !== -1 ||
-            msgStr.indexOf('FlyDataAuthTask') !== -1 ||
-            msgStr.indexOf('Script error.') !== -1 ||
-            sourceStr.indexOf('amap.com') !== -1 ||
-            sourceStr.indexOf('googleapis.com') !== -1 ||
-            sourceStr.indexOf('gstatic.com') !== -1
-          ) {
-            console.warn('⚡ Suppressed third-party script/domain authorization error:', msgStr, 'from:', sourceStr);
+          if (shouldSuppress(message) || shouldSuppress(source) || shouldSuppress(error)) {
             return true; // Suppress error popup/bubbles
           }
           if (originalOnError) {
@@ -29,36 +82,18 @@
         };
 
         window.addEventListener('error', function(event) {
-          var msg = String(event.message || '');
-          var filename = String(event.filename || '');
-          if (
-            msg.indexOf('INVALID_USER_DOMAIN') !== -1 ||
-            msg.indexOf('FlyDataAuthTask') !== -1 ||
-            msg.indexOf('Script error.') !== -1 ||
-            filename.indexOf('amap.com') !== -1 ||
-            filename.indexOf('googleapis.com') !== -1 ||
-            filename.indexOf('gstatic.com') !== -1
-          ) {
-            console.warn('⚡ Intercepted error event in HTML:', msg);
+          if (shouldSuppress(event.message) || shouldSuppress(event.filename) || shouldSuppress(event.error)) {
             event.preventDefault();
             event.stopPropagation();
           }
         }, true);
 
         window.addEventListener('unhandledrejection', function(event) {
-          var reasonStr = String(event.reason || '');
-          var msg = (event.reason && event.reason.message) ? String(event.reason.message) : reasonStr;
-          if (
-            msg.indexOf('INVALID_USER_DOMAIN') !== -1 ||
-            msg.indexOf('FlyDataAuthTask') !== -1 ||
-            reasonStr.indexOf('INVALID_USER_DOMAIN') !== -1 ||
-            reasonStr.indexOf('FlyDataAuthTask') !== -1
-          ) {
-            console.warn('⚡ Suppressed unhandled promise rejection in HTML:', msg);
+          if (shouldSuppress(event.reason)) {
             event.preventDefault();
             event.stopPropagation();
           }
-        });
+        }, true);
       })();
     </script>
   </head>

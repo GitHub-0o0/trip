@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { translations, TranslationDict } from './data/i18n';
-import { TripPlan, DetailedCityPlan, CitySelection, TransitInfo, CustomLlmConfig } from './types';
+import { TripPlan, DetailedCityPlan, CitySelection, TransitInfo, CustomLlmConfig, POI, CityIndex } from './types';
 import { ALL_CITIES_INDEX, generateTransit, generateLocalPlan } from './data/cities';
 import CitySelector from './components/CitySelector';
 import MapContainer from './components/MapContainer';
@@ -15,6 +15,8 @@ import PlanComparison from './components/PlanComparison';
 import HistoryArchive from './components/HistoryArchive';
 import ReceiptMergeManager from './components/ReceiptMergeManager';
 import PlanSyncManager from './components/PlanSyncManager';
+import DailyRouteTransitPanel from './components/DailyRouteTransitPanel';
+import CommunityForum from './components/CommunityForum';
 import {
   Compass,
   Map,
@@ -34,7 +36,8 @@ import {
   DollarSign,
   MapPin,
   Trash2,
-  X
+  X,
+  Users
 } from 'lucide-react';
 
 export default function App() {
@@ -44,13 +47,13 @@ export default function App() {
   const [isAiEnhanced, setIsAiEnhanced] = useState(true);
   const [currentPlan, setCurrentPlan] = useState<TripPlan | null>(null);
   const [historyPlans, setHistoryPlans] = useState<TripPlan[]>([]);
-  const [activeTab, setActiveTab] = useState<'plan' | 'itinerary' | 'compare' | 'history' | 'settings' | 'receipts'>('plan');
+  const [activeTab, setActiveTab] = useState<'plan' | 'itinerary' | 'compare' | 'history' | 'settings' | 'receipts' | 'forum'>('plan');
   const [activeCityIndex, setActiveCityIndex] = useState(0);
 
   // Custom LLM Configuration
   const [customLlmConfig, setCustomLlmConfig] = useState<CustomLlmConfig>({
-    provider: 'gemini',
-    apiKey: '',
+    provider: (process.env.DEEPSEEK_API_KEY || '').startsWith('sk-') ? 'deepseek' : 'gemini',
+    apiKey: process.env.DEEPSEEK_API_KEY || '',
     baseUrl: 'https://api.deepseek.com/v1',
     model: 'deepseek-chat',
   });
@@ -58,13 +61,16 @@ export default function App() {
   // Map Engine & keys configuration
   const [mapEngine, setMapEngine] = useState<'leaflet' | 'google' | 'amap'>('leaflet');
   const [googleMapsKey, setGoogleMapsKey] = useState('');
-  const [amapKey, setAmapKey] = useState('');
+  const [amapKey, setAmapKey] = useState('60a7d9ce28b99a07f485f6e9ccce4ce3');
   const [amapSecurityCode, setAmapSecurityCode] = useState('');
 
   // Loading States
   const [isLoading, setIsLoading] = useState(false);
   const [enhancingCityId, setEnhancingCityId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Custom Cities dynamically created and written by LLM
+  const [customCities, setCustomCities] = useState<CityIndex[]>([]);
 
   // Fetch translation dictionary
   const t: TranslationDict = translations[lang];
@@ -82,6 +88,11 @@ export default function App() {
         setHistoryPlans(JSON.parse(storedHistory));
       }
 
+      const storedCustomCities = localStorage.getItem('trip_ai_custom_cities');
+      if (storedCustomCities) {
+        setCustomCities(JSON.parse(storedCustomCities));
+      }
+
       const cachedActive = localStorage.getItem('trip_ai_current_plan');
       if (cachedActive) {
         const parsedPlan = JSON.parse(cachedActive);
@@ -93,7 +104,18 @@ export default function App() {
 
       const storedLlm = localStorage.getItem('trip_ai_custom_llm_config');
       if (storedLlm) {
-        setCustomLlmConfig(JSON.parse(storedLlm));
+        const parsed = JSON.parse(storedLlm);
+        if (!parsed.apiKey && parsed.provider === 'deepseek' && process.env.DEEPSEEK_API_KEY) {
+          parsed.apiKey = process.env.DEEPSEEK_API_KEY;
+        }
+        setCustomLlmConfig(parsed);
+      } else if (process.env.DEEPSEEK_API_KEY) {
+        setCustomLlmConfig({
+          provider: 'deepseek',
+          apiKey: process.env.DEEPSEEK_API_KEY,
+          baseUrl: 'https://api.deepseek.com/v1',
+          model: 'deepseek-chat',
+        });
       }
 
       const storedMapEngine = localStorage.getItem('trip_ai_map_engine');
@@ -104,7 +126,7 @@ export default function App() {
       const storedGoogleKey = localStorage.getItem('trip_ai_google_maps_key') || process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
       setGoogleMapsKey(storedGoogleKey);
 
-      const storedAmapKey = localStorage.getItem('trip_ai_amap_key') || process.env.AMAP_KEY || '';
+      const storedAmapKey = localStorage.getItem('trip_ai_amap_key') || process.env.AMAP_KEY || '60a7d9ce28b99a07f485f6e9ccce4ce3';
       setAmapKey(storedAmapKey);
 
       const storedAmapSecurityCode = localStorage.getItem('trip_ai_amap_security_code') || '';
@@ -120,9 +142,20 @@ export default function App() {
     localStorage.setItem('trip_ai_history', JSON.stringify(updatedHistory));
   };
 
-  // Convert city code to localized name
-  const getCityLabel = (id: string) => {
-    const city = ALL_CITIES_INDEX.find((c) => c.id === id);
+  const handleAddCustomCity = (city: CityIndex) => {
+    setCustomCities((prev) => {
+      const exists = prev.some((c) => c.id === city.id);
+      if (exists) return prev;
+      const updated = [...prev, city];
+      localStorage.setItem('trip_ai_custom_cities', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Convert city code to localized name safely
+  const getCityLabel = (id: string | null | undefined) => {
+    if (!id) return '';
+    const city = [...ALL_CITIES_INDEX, ...customCities].find((c) => c.id === id);
     if (!city) {
       return id.charAt(0).toUpperCase() + id.slice(1);
     }
@@ -296,6 +329,35 @@ export default function App() {
     localStorage.setItem('trip_ai_current_plan', JSON.stringify(updatedPlan));
     const updatedHistory = historyPlans.map((h) => h.id === updatedPlan.id ? updatedPlan : h);
     saveHistoryToStorage(updatedHistory);
+  };
+
+  // 4c. Update current active city spots (POIs) reordered or edited under a day plan
+  const handleUpdateCityPois = (dayNumber: number, updatedPois: POI[]) => {
+    if (!currentPlan) return;
+    const updatedCityPlans = currentPlan.cityPlans.map((cityPlan, cityIdx) => {
+      if (cityIdx === activeCityIndex) {
+        const updatedDays = cityPlan.days.map((dayPlan) => {
+          if (dayPlan.day === dayNumber) {
+            return {
+              ...dayPlan,
+              pois: updatedPois
+            };
+          }
+          return dayPlan;
+        });
+        return {
+          ...cityPlan,
+          days: updatedDays
+        };
+      }
+      return cityPlan;
+    });
+
+    const updatedPlan: TripPlan = {
+      ...currentPlan,
+      cityPlans: updatedCityPlans
+    };
+    handleUpdatePlan(updatedPlan);
   };
 
   // 5. Historical plan restoration trigger
@@ -492,6 +554,22 @@ export default function App() {
 
   const currentActiveCityPlan = currentPlan ? currentPlan.cityPlans[activeCityIndex] : null;
 
+  const getActiveAiName = () => {
+    if (customLlmConfig.provider === 'gemini') {
+      return 'Google Gemini 3.5';
+    }
+    if (customLlmConfig.provider === 'deepseek') {
+      return 'DeepSeek';
+    }
+    if (customLlmConfig.provider === 'qwen') {
+      return lang === 'zh' ? '通义千问' : 'Qwen';
+    }
+    if (customLlmConfig.provider === 'minimax') {
+      return 'MiniMax';
+    }
+    return lang === 'zh' ? 'Custom AI' : 'Custom AI';
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans flex flex-col scrollbar-thin">
       {/* 1. BRAND GLOBAL HEADER */}
@@ -601,6 +679,9 @@ export default function App() {
               setIsAiEnhanced={setIsAiEnhanced}
               onGenerate={handleGeneratePlan}
               isLoading={isLoading}
+              customLlmConfig={customLlmConfig}
+              customCities={customCities}
+              onAddCustomCity={handleAddCustomCity}
             />
 
             <PlanSyncManager
@@ -699,76 +780,15 @@ export default function App() {
 
                 {/* 2. Interactive Map view and City selectors */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  {/* Left Column: Multicity List selectors */}
-                  <div className="lg:col-span-4 space-y-3 shrink-0">
-                    <h4 className="font-sans font-semibold text-slate-500 text-xs tracking-wider uppercase mb-2">
-                      {lang === 'zh' ? '路线经停站点' : 'ROUTING STOPS'}
-                    </h4>
-                    <div className="space-y-2.5">
-                      {currentPlan.cityPlans.map((plan, idx) => {
-                        const isCurrentActive = idx === activeCityIndex;
-                        const trans = currentPlan.transits[plan.cityId];
-
-                        return (
-                          <div key={plan.cityId} className="space-y-1.5 font-sans">
-                            {/* Intermediate travel transit card */}
-                            {trans && (
-                              <div className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-100/60 border border-slate-200/40 rounded-xl max-w-sm mx-auto text-[10px] font-sans font-semibold text-slate-500">
-                                {getTransitIcon(trans.type)}
-                                <span className="text-[10px] text-slate-600">{getTransitLabel(trans.type)}</span>
-                                <span className="text-[10px] text-slate-400 font-mono">
-                                  {trans.distance}km / {trans.duration}
-                                </span>
-                              </div>
-                            )}
-
-                            {/* City Select Card clickable */}
-                            <button
-                              type="button"
-                              onClick={() => setActiveCityIndex(idx)}
-                              className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-left group cursor-pointer ${
-                                isCurrentActive
-                                  ? 'bg-slate-850 text-white border-slate-850 shadow-md ring-4 ring-slate-100'
-                                  : 'bg-white text-slate-700 border-slate-100 hover:bg-slate-50/50 hover:border-slate-200'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className={`w-7.5 h-7.5 rounded-xl flex items-center justify-center font-bold text-xs ${
-                                    isCurrentActive ? 'bg-white text-slate-800' : 'bg-slate-100 text-slate-500'
-                                  }`}
-                                >
-                                  {idx + 1}
-                                </div>
-                                <div className="font-sans">
-                                  <h5 className="font-bold text-sm leading-tight">
-                                    {lang === 'zh' ? plan.cityName : plan.cityNameEn}
-                                  </h5>
-                                  <p
-                                    className={`text-[10px] font-medium uppercase tracking-wide mt-1 ${
-                                      isCurrentActive ? 'text-slate-300' : 'text-slate-400'
-                                    }`}
-                                  >
-                                    {plan.daysCount} {plan.daysCount === 1 ? 'Day' : 'Days'}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                {plan.isAiEnhanced ? (
-                                  <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/10 font-bold text-[9px] px-2 py-0.5 rounded-full hover:scale-105 active:scale-95 transition-all">
-                                    AI
-                                  </span>
-                                ) : (
-                                  <span className="bg-slate-150 text-slate-400 border border-transparent font-medium text-[9px] px-2 py-0.5 rounded-full">
-                                    Local
-                                  </span>
-                                )}
-                              </div>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  {/* Left Column: Integrated Daily recommended transit & travel route timeline */}
+                  <div className="lg:col-span-4 shrink-0 animate-fade-in">
+                    <DailyRouteTransitPanel
+                      currentPlan={currentPlan}
+                      activeCityIndex={activeCityIndex}
+                      lang={lang}
+                      getCityLabel={getCityLabel}
+                      onSelectCityIndex={setActiveCityIndex}
+                    />
                   </div>
 
                   {/* Right Column: Custom interactive map routing */}
@@ -842,7 +862,7 @@ export default function App() {
                       </div>
 
                       {/* Itinerary Timeline */}
-                      <TimelineView t={t} lang={lang} days={currentActiveCityPlan.days} />
+                      <TimelineView t={t} lang={lang} days={currentActiveCityPlan.days} onUpdatePois={handleUpdateCityPois} />
                     </div>
 
                     {/* Right side: visual costs analysis and survival advice lists */}
@@ -855,7 +875,7 @@ export default function App() {
                         <div className="flex items-center gap-2 justify-between">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                            <span className="text-[10px] font-bold opacity-90 uppercase tracking-widest">MiniMax 2.7 AI Status</span>
+                            <span className="text-[10px] font-bold opacity-90 uppercase tracking-widest">{getActiveAiName()} AI Status</span>
                           </div>
                           <Sparkles className="w-4 h-4 text-blue-200 animate-pulse" />
                         </div>
@@ -865,8 +885,8 @@ export default function App() {
                               ? `“AI 成功加载完成！${currentActiveCityPlan.cityName} 每日餐饮，住宿，以及景点拥堵状况已完美校对校正，保障高品质体验。”`
                               : `"Itinerary upgraded! Categorical dining hotspots, staying ratings, and localized timing grids for ${currentActiveCityPlan.cityNameEn} are optimized."`)
                             : (lang === 'zh'
-                              ? `“建议点击上方 'AI 精兵一键升级' 启用 MiniMax 2.7 重构算法校对路线通联。”`
-                              : `"Click the AI Upgrade Button above to invoke MiniMax 2.7 model optimization engine for this stop."`)
+                              ? `“建议点击上方 'AI 精兵一键升级' 启用 ${getActiveAiName()} 重构算法校对路线通联。”`
+                              : `"Click the AI Upgrade Button above to invoke ${getActiveAiName()} model optimization engine for this stop."`)
                           }
                         </p>
                       </div>
@@ -1338,6 +1358,25 @@ export default function App() {
             setErrorMessage={setErrorMessage}
           />
         )}
+
+        {activeTab === 'forum' && (
+          <CommunityForum
+            currentPlan={currentPlan}
+            onClonePlan={(plan) => {
+              setCurrentPlan(plan);
+              if (plan.departureCity) {
+                setDepartureCity(plan.departureCity);
+              }
+              if (plan.selectedDestinations) {
+                setSelectedDestinations(plan.selectedDestinations);
+              }
+              setActiveCityIndex(0);
+              setActiveTab('itinerary');
+            }}
+            lang={lang}
+            onClose={() => setActiveTab('plan')}
+          />
+        )}
       </main>
 
       {/* 4. SEAMLESS DOCK NAVIGATION BAR (BOTTOM STICKY) */}
@@ -1396,6 +1435,17 @@ export default function App() {
         >
           <FileSpreadsheet className="w-5.5 h-5.5" />
           <span className="text-[10px] select-none font-bold tracking-tight leading-none">{t.navReceipts}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('forum')}
+          className={`flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 ${
+            activeTab === 'forum' ? 'text-blue-600 font-bold scale-105 animate-pulse' : 'text-slate-400 hover:text-slate-650 animate-none'
+          }`}
+          id="nav-forum-tab-btn"
+        >
+          <Users className="w-5.5 h-5.5 text-indigo-500" />
+          <span className="text-[10px] select-none font-bold tracking-tight leading-none text-indigo-700">{t.navForum}</span>
         </button>
 
         <button

@@ -105,14 +105,19 @@ async function callOpenAiCompatible(
 // New API: Connection test route for domestic/custom API service configs
 app.post('/api/plan/test-ai', async (req, res) => {
   const { customLlm } = req.body;
-  if (!customLlm || !customLlm.apiKey || !customLlm.baseUrl) {
-    return res.status(400).json({ success: false, error: 'Missing API key or Base URL configuration.' });
+  if (!customLlm || !customLlm.baseUrl) {
+    return res.status(400).json({ success: false, error: 'Missing Base URL configuration.' });
+  }
+
+  const effectiveApiKey = customLlm.apiKey || (customLlm.provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : '') || '';
+  if (!effectiveApiKey) {
+    return res.status(400).json({ success: false, error: 'Missing API key configuration.' });
   }
 
   try {
     const rawText = await callOpenAiCompatible(
       customLlm.baseUrl,
-      customLlm.apiKey,
+      effectiveApiKey,
       customLlm.model || 'deepseek-chat',
       'Please greet the user warmly and confirm that their custom API key connection is fully operational in exactly 20 characters or less.'
     );
@@ -288,6 +293,222 @@ Return a single JSON object matching this schema structure:
   }
 });
 
+// Real-time custom city memory persistence
+const dynamicCustomCities: any[] = [];
+const dynamicCustomCityPlans: { [cityId: string]: any } = {};
+
+// API: Generate and Write custom city index and template plan data using the active integrated LLM
+app.post('/api/cities/generate-write', async (req, res) => {
+  const { query, customLlm } = req.body;
+  if (!query) {
+    return res.status(400).json({ error: 'Query is required for custom city generation.' });
+  }
+
+  const queryClean = query.trim();
+
+  try {
+    const hasCustomLlm = customLlm && customLlm.provider && customLlm.provider !== 'gemini';
+    const effectiveApiKey = customLlm?.apiKey || (customLlm?.provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : '') || '';
+
+    const systemInstruction = `You are an expert travel database orchestrator. Given a search query for a city name, analyze it and generate:
+1. cityIndex: The metadata node for indexing this city.
+2. cityDetail: A gorgeous, highly detailed travel schedule of exactly 3 days for this city containing real popular POIs, coordinates, cost estimations (in CNY), and helpful travel tips.
+
+IMPORTANT: You must response with a single valid JSON object containing "cityIndex" and "cityDetail". Ensure there are no markdown backticks, no trailing comments, and the formatting matches the schemas below:
+{
+  "cityIndex": {
+    "id": "lowercase_english_id_no_spaces",
+    "name": "Chinese City Name (e.g. 三明)",
+    "nameEn": "English City Name (e.g. Sanming)",
+    "pinyin": "pinyin_lowercase_no_spaces (e.g. sanming)",
+    "region": "Province/State Name in Chinese (e.g. 福建)",
+    "regionEn": "Province/State Name in English (e.g. Fujian)",
+    "isInternational": false,
+    "coordinates": [latitude_float, longitude_float]
+  },
+  "cityDetail": {
+    "cityId": "lowercase_english_id_no_spaces (must match the id in cityIndex)",
+    "cityName": "Chinese City Name",
+    "cityNameEn": "English City Name",
+    "daysCount": 3,
+    "bestSeason": "Best season description in Chinese",
+    "bestSeasonEn": "Best season description in English",
+    "localExpense": {
+      "tickets": average_cny_tickets_sum_for_3_days,
+      "food": average_cny_food_sum_for_3_days,
+      "hotel": average_cny_hotel_sum_for_3_days,
+      "transit": average_cny_local_transit_sum_for_3_days
+    },
+    "veteranTips": ["Tip 1 in Chinese", "Tip 2 in Chinese", "Tip 3 in Chinese"],
+    "veteranTipsEn": ["Tip 1 in English", "Tip 2 in English", "Tip 3 in English"],
+    "days": [
+      {
+        "day": 1,
+        "pois": [
+          {
+            "id": "unique_id_string_1",
+            "name": "Attraction Name in Chinese",
+            "nameEn": "Name in English",
+            "type": "attraction",
+            "time": "09:00",
+            "duration": "3h",
+            "cost": 50,
+            "bestTime": "Golden hour advice in Chinese",
+            "crowdTimes": "Crowd hour advice in Chinese",
+            "tip": "Insider tip in Chinese",
+            "tipEn": "Insider tip in English",
+            "coordinates": [latitude_float, longitude_float]
+          }
+        ]
+      }
+    ]
+  }
+}`;
+
+    const mainPrompt = `Generate cityIndex and cityDetail for the query city: "${queryClean}". Try to make the coordinates, POI suggestions, local costs, and coordinates highly realistic and localized. Give up to 3 characteristic activities/POIs across each of the 3 days.`;
+
+    let responseJsonText = '';
+
+    if (hasCustomLlm && customLlm.baseUrl && effectiveApiKey) {
+      responseJsonText = await callOpenAiCompatible(
+        customLlm.baseUrl,
+        effectiveApiKey,
+        customLlm.model || 'deepseek-chat',
+        mainPrompt,
+        systemInstruction,
+        true
+      );
+    } else {
+      // Use default Gemini API
+      const ai = getGeminiClient();
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: `${systemInstruction}\n\nUser query:\n${mainPrompt}`,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              cityIndex: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  name: { type: Type.STRING },
+                  nameEn: { type: Type.STRING },
+                  pinyin: { type: Type.STRING },
+                  region: { type: Type.STRING },
+                  regionEn: { type: Type.STRING },
+                  isInternational: { type: Type.BOOLEAN },
+                  coordinates: {
+                    type: Type.ARRAY,
+                    items: { type: Type.NUMBER }
+                  }
+                },
+                required: ['id', 'name', 'nameEn', 'pinyin', 'region', 'regionEn', 'isInternational', 'coordinates']
+              },
+              cityDetail: {
+                type: Type.OBJECT,
+                properties: {
+                  cityId: { type: Type.STRING },
+                  cityName: { type: Type.STRING },
+                  cityNameEn: { type: Type.STRING },
+                  daysCount: { type: Type.INTEGER },
+                  bestSeason: { type: Type.STRING },
+                  bestSeasonEn: { type: Type.STRING },
+                  localExpense: {
+                    type: Type.OBJECT,
+                    properties: {
+                      tickets: { type: Type.INTEGER },
+                      food: { type: Type.INTEGER },
+                      hotel: { type: Type.INTEGER },
+                      transit: { type: Type.INTEGER }
+                    },
+                    required: ['tickets', 'food', 'hotel', 'transit']
+                  },
+                  veteranTips: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  veteranTipsEn: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  days: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        day: { type: Type.INTEGER },
+                        pois: {
+                          type: Type.ARRAY,
+                          items: {
+                            type: Type.OBJECT,
+                            properties: {
+                              id: { type: Type.STRING },
+                              name: { type: Type.STRING },
+                              nameEn: { type: Type.STRING },
+                              type: { type: Type.STRING },
+                              time: { type: Type.STRING },
+                              duration: { type: Type.STRING },
+                              cost: { type: Type.INTEGER },
+                              bestTime: { type: Type.STRING },
+                              crowdTimes: { type: Type.STRING },
+                              tip: { type: Type.STRING },
+                              tipEn: { type: Type.STRING },
+                              coordinates: {
+                                type: Type.ARRAY,
+                                items: { type: Type.NUMBER }
+                              }
+                            },
+                            required: ['id', 'name', 'nameEn', 'type', 'time', 'duration', 'cost', 'bestTime', 'crowdTimes', 'tip', 'tipEn', 'coordinates']
+                          }
+                        }
+                      },
+                      required: ['day', 'pois']
+                    }
+                  }
+                },
+                required: ['cityId', 'cityName', 'cityNameEn', 'daysCount', 'bestSeason', 'bestSeasonEn', 'localExpense', 'veteranTips', 'veteranTipsEn', 'days']
+              }
+            },
+            required: ['cityIndex', 'cityDetail']
+          }
+        }
+      });
+      responseJsonText = response.text ? response.text.trim() : '{}';
+    }
+
+    const cleanedText = cleanJsonString(responseJsonText);
+    const parsed = JSON.parse(cleanedText);
+
+    if (parsed.cityIndex && parsed.cityDetail) {
+      const targetId = parsed.cityIndex.id.toLowerCase().replace(/\s+/g, '');
+      parsed.cityIndex.id = targetId;
+      parsed.cityDetail.cityId = targetId;
+
+      if (typeof parsed.cityIndex.isInternational !== 'boolean') {
+        parsed.cityIndex.isInternational = false;
+      }
+
+      const existingIdx = dynamicCustomCities.findIndex(c => c.id === targetId);
+      if (existingIdx !== -1) {
+        dynamicCustomCities[existingIdx] = parsed.cityIndex;
+      } else {
+        dynamicCustomCities.push(parsed.cityIndex);
+      }
+
+      dynamicCustomCityPlans[targetId] = parsed.cityDetail;
+
+      console.log(`Successfully generated and wrote custom city data via LLM: ${targetId} (${parsed.cityIndex.name})`);
+
+      return res.json({
+        success: true,
+        cityIndex: parsed.cityIndex,
+        cityDetail: parsed.cityDetail
+      });
+    } else {
+      throw new Error('LLM structural response did not contain cityIndex or cityDetail keys.');
+    }
+  } catch (err: any) {
+    console.error('Failed to generate and write custom city data:', err.message);
+    res.status(500).json({ error: `AI City Generation and Writing failed: ${err.message}` });
+  }
+});
+
 // 1. API: Online City search supplement (fallback using Gemini AI when unknown city is looked up)
 app.get('/api/cities/search', async (req, res) => {
   const query = req.query.query ? String(req.query.query).trim() : '';
@@ -295,8 +516,9 @@ app.get('/api/cities/search', async (req, res) => {
     return res.json([]);
   }
 
-  // First check local index (case-insensitive fuzzy match)
-  const localMatch = ALL_CITIES_INDEX.filter(
+  // First check local index (case-insensitive fuzzy match) + custom dynamized cities list
+  const allAvailable = [...ALL_CITIES_INDEX, ...dynamicCustomCities];
+  const localMatch = allAvailable.filter(
     (c) =>
       c.name.includes(query) ||
       c.nameEn.toLowerCase().includes(query.toLowerCase()) ||
@@ -370,7 +592,36 @@ app.post('/api/plan/generate', async (req, res) => {
 
   // If AI enhancements not requested, do rapid, failure-proof local template rendering immediately
   if (!isAiEnhanced) {
-    const plans = destinations.map((d: any) => generateLocalPlan(d.cityId, d.days));
+    const plans = destinations.map((d: any) => {
+      if (dynamicCustomCityPlans[d.cityId]) {
+        const cachedPlan = dynamicCustomCityPlans[d.cityId];
+        const result = JSON.parse(JSON.stringify(cachedPlan));
+        result.daysCount = d.days;
+        if (d.days <= cachedPlan.days.length) {
+          result.days = result.days.slice(0, d.days);
+        } else {
+          while (result.days.length < d.days) {
+            const nextDayNum = result.days.length + 1;
+            const originalDayTemplate = cachedPlan.days[(nextDayNum - 1) % cachedPlan.days.length];
+            const deepCopyDay = JSON.parse(JSON.stringify(originalDayTemplate));
+            deepCopyDay.day = nextDayNum;
+            deepCopyDay.pois.forEach((poi: any, idx: number) => {
+              poi.id = `${d.cityId}-dynamic-p-d${nextDayNum}-${idx}`;
+            });
+            result.days.push(deepCopyDay);
+          }
+        }
+        const ratio = d.days / cachedPlan.daysCount;
+        result.localExpense = {
+          tickets: Math.round(cachedPlan.localExpense.tickets * ratio),
+          food: Math.round(cachedPlan.localExpense.food * ratio),
+          hotel: Math.round(cachedPlan.localExpense.hotel * ratio),
+          transit: Math.round(cachedPlan.localExpense.transit * ratio),
+        };
+        return result;
+      }
+      return generateLocalPlan(d.cityId, d.days);
+    });
     return res.json({ plans });
   }
 
@@ -413,14 +664,15 @@ app.post('/api/plan/generate', async (req, res) => {
       }]
     }]`;
 
-    let rawText = '';
+     let rawText = '';
     const hasCustomLlm = customLlm && customLlm.provider && customLlm.provider !== 'gemini';
 
     if (hasCustomLlm) {
       console.log(`Routing through Custom LLM Provider: ${customLlm.provider} (${customLlm.model})`);
+      const effectiveApiKey = customLlm.apiKey || (customLlm.provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : '') || '';
       rawText = await callOpenAiCompatible(
         customLlm.baseUrl,
-        customLlm.apiKey,
+        effectiveApiKey,
         customLlm.model,
         targetPrompt,
         "You are an expert global travel router. You must output a valid JSON array strictly aligning with the instructions. Do not write any prelude or trailing conversational text. Wrap the response in raw JSON format.",
@@ -701,6 +953,381 @@ app.post('/api/plan/enhance-city', async (req, res) => {
     const plan = generateLocalPlan(cityId, daysCount);
     res.json(plan);
   }
+});
+
+// Dynamic POI real-time intelligence analytics endpoint
+app.post('/api/poi/intel-realtime', async (req, res) => {
+  const { poiName, poiType, lang, customLlm } = req.body;
+  if (!poiName) {
+    return res.status(400).json({ error: 'Missing poiName parameter.' });
+  }
+
+  const isZh = lang === 'zh';
+  const effectiveLang = lang || 'zh';
+
+  try {
+    const promptText = `Generate real-time local intelligence analysis for the point of interest (POI): "${poiName}" (Type: "${poiType || 'attraction'}").
+Please return exactly one JSON object complying with this exact schema:
+{
+  "weather": {
+    "temp": "Temp description e.g. '18°C' or '24°C'",
+    "condition": "Weather icon and text in ${effectiveLang === 'zh' ? 'Chinese' : 'English'} (e.g. '⛅ 多云转晴' or '⛅ Partly Sunny')",
+    "humidity": "Humidity e.g. '45%'",
+    "uvIndex": "UV scale explanation e.g. '中等 (3级)' or 'Moderate (3)'",
+    "wind": "Wind speed e.g. '东南风 2级' or 'SE Wind 2'"
+  },
+  "traffic": {
+    "status": "good" status or "slow" or "heavy",
+    "badge": "Short badge text in ${effectiveLang === 'zh' ? 'Chinese' : 'English'} (e.g. '🟢 畅行顺意' or '🟢 Traffic Smooth')",
+    "badgeColor": "Recommended tailwind class string: use 'text-emerald-700 bg-emerald-50 border-emerald-250' for good, 'text-amber-700 bg-amber-50 border-amber-250' for slow, or 'text-rose-700 bg-rose-50 border-rose-250' for heavy",
+    "speed": "Avg speed around POI e.g. '本区均速 42km/h' or 'Local Avg 42km/h'",
+    "tip": "Short, helpful localized navigation or transit bypass tips in ${effectiveLang === 'zh' ? 'Chinese' : 'English'} (e.g., 'Take line 2' or 'Parking is limited')"
+  },
+  "gourmet": "A stellar, delicious culinary recommendation near this POI in ${effectiveLang === 'zh' ? 'Chinese' : 'English'} (1-2 sentences, include specific local specialties)",
+  "strategy": "A clever sightseeing strategy, entrance tip, or queueing advice in ${effectiveLang === 'zh' ? 'Chinese' : 'English'} tailored to this POI (1-2 sentences)"
+}
+
+Keep all texts concise, highly localized, authentic, and direct. Deliver purely the raw JSON.`;
+
+    let rawText = '';
+    const hasCustomLlm = customLlm && customLlm.provider && customLlm.provider !== 'gemini';
+
+    if (hasCustomLlm) {
+      rawText = await callOpenAiCompatible(
+        customLlm.baseUrl,
+        customLlm.apiKey,
+        customLlm.model,
+        promptText,
+        "You are an expert local guide and real-time transit intelligence engine. You must output a valid single JSON object aligning with instructions. Raw JSON only.",
+        true
+      );
+    } else {
+      const ai = getGeminiClient();
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: promptText,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              weather: {
+                type: Type.OBJECT,
+                properties: {
+                  temp: { type: Type.STRING },
+                  condition: { type: Type.STRING },
+                  humidity: { type: Type.STRING },
+                  uvIndex: { type: Type.STRING },
+                  wind: { type: Type.STRING }
+                },
+                required: ['temp', 'condition', 'humidity', 'uvIndex', 'wind']
+              },
+              traffic: {
+                type: Type.OBJECT,
+                properties: {
+                  status: { type: Type.STRING },
+                  badge: { type: Type.STRING },
+                  badgeColor: { type: Type.STRING },
+                  speed: { type: Type.STRING },
+                  tip: { type: Type.STRING }
+                },
+                required: ['status', 'badge', 'badgeColor', 'speed', 'tip']
+              },
+              gourmet: { type: Type.STRING },
+              strategy: { type: Type.STRING }
+            },
+            required: ['weather', 'traffic', 'gourmet', 'strategy']
+          }
+        }
+      });
+      rawText = response.text || '{}';
+    }
+
+    const cleanedText = cleanJsonString(rawText);
+    const parsedIntel = JSON.parse(cleanedText || '{}');
+    res.json(parsedIntel);
+  } catch (err: any) {
+    console.error('Realtime POI Intel lookup failed, falling back to static package:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- REAL-TIME TRAVEL FORUM & COMMUNITY SYSTEM ---
+
+const FORUM_FILE_PATH = '/tmp/trip_ai_forum_posts.json';
+
+// Seed initial mockup high-quality community plans
+const INITIAL_FORUM_POSTS = [
+  {
+    id: 'post-seed-kyoto',
+    title: '京都秋日枫叶季小众私藏路线 🍁 极简治愈慢行',
+    description: '避开人挤人的清水寺，分享一条私藏的秋日赏枫极简静心路线。从南禅寺步行至法然院，沿途可以感受地道的宇治抹茶，最后在琉璃光院观赏红叶倒影。本方案包含特色汤豆腐美食推荐和清晨人少时的拍照秘籍。',
+    tags: ['赏枫', '慢旅行', '特色美食', '日本'],
+    author: '秋原小径 🦊',
+    upvotes: 42,
+    createdAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString(), // 3 days ago
+    comments: [
+      { id: 'c1', author: '旅行者阿星', text: '感谢楼主！这条京都路线太棒了，尤其是无人的琉璃光院拍照角度。已收藏！', createdAt: new Date(Date.now() - 3600000 * 48).toISOString() },
+      { id: 'c2', author: '抹茶控101', text: '沿途那家抹茶店的名字是什么呀？想要去打卡！', createdAt: new Date(Date.now() - 3600000 * 20).toISOString() }
+    ],
+    tripPlan: {
+      id: 'plan-seed-kyoto',
+      title: '京都秋日赏枫治愈之旅',
+      departureCity: 'tokyo',
+      selectedDestinations: [
+        { cityId: 'kyoto', days: 2 }
+      ],
+      totalBudget: 450,
+      totalDays: 2,
+      cityPlans: [
+        {
+          cityId: 'kyoto',
+          cityName: '京都',
+          cityNameEn: 'Kyoto',
+          daysCount: 2,
+          bestSeason: '11月-12月 (红叶季)',
+          bestSeasonEn: 'Nov-Dec (Autumn foliage)',
+          localExpense: { tickets: 50, food: 150, hotel: 200, transit: 50 },
+          veteranTips: ['清晨7:30前到达南禅寺可避开大批旅行团', '琉璃光院需要提前预约'],
+          veteranTipsEn: ['Reach Nanzenji before 7:30 AM to avoid crowds', 'Ruriko-in requires prior booking'],
+          isAiEnhanced: true,
+          days: [
+            {
+              day: 1,
+              pois: [
+                {
+                  id: 'poi-k1',
+                  name: '南禅寺',
+                  nameEn: 'Nanzenji Temple',
+                  type: 'attraction',
+                  time: '08:00',
+                  duration: '2h',
+                  cost: 10,
+                  bestTime: '08:00-10:00',
+                  crowdTimes: '11:00-15:00',
+                  tip: '顺着红砖的水渠(水路阁)拍照极具明治维新时期的古典美感。',
+                  tipEn: 'The brick aqueduct (Suirokaku) creates a beautiful historical backdrop.',
+                  coordinates: [35.0112, 135.7938]
+                },
+                {
+                  id: 'poi-k2',
+                  name: '奥丹汤豆腐 (南禅寺店)',
+                  nameEn: 'Okudan Yudofu',
+                  type: 'food',
+                  time: '11:30',
+                  duration: '1.5h',
+                  cost: 35,
+                  bestTime: '11:30',
+                  crowdTimes: '12:00-13:30',
+                  tip: '拥有几百年历史的古老庭院，专注于传统的温润热豆腐多道式膳食。',
+                  tipEn: 'Centuries old garden serving exquisite yudofu (tofu hotpot) course meals.',
+                  coordinates: [35.0102, 135.7925]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      transits: {}
+    }
+  },
+  {
+    id: 'post-seed-iceland',
+    title: '冰岛冬季极致追光与黑沙滩探险 🌌 (附自驾指南)',
+    description: '冰岛是一生一定要去一次的神秘国度。本方案专注于冬季极光追逐，包含维克镇黑沙滩、塞里雅兰瀑布，以及本地非常小众且无需排队的冰洞探险。总结了风暴天气下的自驾避险技巧！',
+    tags: ['极光', '深度自驾', '小众探险', '自然风光'],
+    author: '极地向导 Thor ❄️',
+    upvotes: 68,
+    createdAt: new Date(Date.now() - 3600000 * 24 * 5).toISOString(), // 5 days ago
+    comments: [
+      { id: 'c3', author: '等一个极光', text: '冬季自驾真的需要好技术！楼主的避险技巧太实用了！', createdAt: new Date(Date.now() - 3600000 * 72).toISOString() },
+      { id: 'c4', author: 'AeroTrip', text: '收藏了，明年1月份按照这个路线出发！', createdAt: new Date(Date.now() - 3600000 * 12).toISOString() }
+    ],
+    tripPlan: {
+      id: 'plan-seed-iceland',
+      title: '冰岛极光与冰沙滩深度探秘',
+      departureCity: 'reykjavik',
+      selectedDestinations: [
+        { cityId: 'vik', days: 2 }
+      ],
+      totalBudget: 1200,
+      totalDays: 2,
+      cityPlans: [
+        {
+          cityId: 'vik',
+          cityName: '维克',
+          cityNameEn: 'Vik',
+          daysCount: 2,
+          bestSeason: '10月-次年3月 (极光期)',
+          bestSeasonEn: 'Oct-Mar (Aurora Season)',
+          localExpense: { tickets: 100, food: 300, hotel: 600, transit: 200 },
+          veteranTips: ['冬季黑沙滩风浪极其危险，切勿靠近水线！', '每天下午5点在Vedur网查看极光指数'],
+          veteranTipsEn: ['Keep safe distance from water line at Black Sand Beach', 'Check Vedur website daily for aurora reports'],
+          isAiEnhanced: true,
+          days: [
+            {
+              day: 1,
+              pois: [
+                {
+                  id: 'poi-i1',
+                  name: '雷尼斯法尔黑沙滩',
+                  nameEn: 'Reynisfjara Black Sand Beach',
+                  type: 'attraction',
+                  time: '10:00',
+                  duration: '2.5h',
+                  cost: 0,
+                  bestTime: '10:30-13:00',
+                  crowdTimes: '13:30-15:00',
+                  tip: '壮丽的玄武岩石柱与漆黑的海岸线相得益彰，犹如外星世界。注意海浪诡秘！',
+                  tipEn: 'Stunning basalt columns and jet-black shores. Exercise extreme caution near the sea.',
+                  coordinates: [63.4025, -19.0188]
+                },
+                {
+                  id: 'poi-i2',
+                  name: 'Sudur Vik 景观餐厅',
+                  nameEn: 'Sudur Vik Restaurant',
+                  type: 'food',
+                  time: '18:00',
+                  duration: '1.5h',
+                  cost: 45,
+                  bestTime: '18:00',
+                  crowdTimes: '19:00-20:30',
+                  tip: '坐落于维克镇小山丘顶，羊排和披萨极其美味，能够鸟瞰远处海洋。',
+                  tipEn: 'Cozy venue on the hill top. Outstanding roasted lamb chops and premium stone-baked pizzas.',
+                  coordinates: [63.4201, -19.0090]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      transits: {}
+    }
+  }
+];
+
+function loadForumPosts(): any[] {
+  try {
+    if (fs.existsSync(FORUM_FILE_PATH)) {
+      const content = fs.readFileSync(FORUM_FILE_PATH, 'utf-8');
+      return JSON.parse(content);
+    }
+  } catch (err) {
+    console.error('Failed to load forum posts:', err);
+  }
+  saveForumPosts(INITIAL_FORUM_POSTS);
+  return INITIAL_FORUM_POSTS;
+}
+
+function saveForumPosts(posts: any[]) {
+  try {
+    fs.writeFileSync(FORUM_FILE_PATH, JSON.stringify(posts, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save forum posts:', err);
+  }
+}
+
+// 1. Get all forum posts
+app.get('/api/forum/posts', (req, res) => {
+  const posts = loadForumPosts();
+  res.json({ success: true, posts });
+});
+
+// 2. Add new forum post with optional Gemini AI caption optimization
+app.post('/api/forum/posts', async (req, res) => {
+  const { title, description, tags, author, tripPlan } = req.body;
+  if (!tripPlan) {
+    return res.status(400).json({ success: false, error: 'Missing trip plan.' });
+  }
+
+  const posts = loadForumPosts();
+  let finalTitle = (title || '').trim();
+  let finalDesc = (description || '').trim();
+
+  // Create an engaging teaser using Gemini AI if description is brief
+  if (!finalDesc || finalDesc.length < 10) {
+    try {
+      const cities = tripPlan.cityPlans ? tripPlan.cityPlans.map((c: any) => c.cityName).join(' and ') : 'marvelous sights';
+      const spots = tripPlan.cityPlans && tripPlan.cityPlans[0] && tripPlan.cityPlans[0].days 
+        ? tripPlan.cityPlans[0].days[0].pois.map((p: any) => p.name).slice(0, 3).join(', ') 
+        : '';
+
+      const promptText = `A user is sharing their travel plan called "${tripPlan.title || 'My itinerary'}" traveling through ${cities}. 
+The plan includes top spots like: ${spots}.
+Write a captivating, warm, and highly inspirational travel community platform caption (2-3 sentences max) recommending this trip. Keep the tone friendly, adventurous, and authentic. Write it in Chinese.`;
+      
+      const ai = getGeminiClient();
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: promptText
+      });
+      if (response && response.text) {
+        finalDesc = response.text.trim();
+      }
+    } catch (e: any) {
+      console.warn('AI caption enhancement failed, using standard fallback', e.message);
+      finalDesc = finalDesc || `分享我刚刚规划的优质行程：「${tripPlan.title || '完美旅行'}」！沿途风光无限，快来克隆体验。`;
+    }
+  }
+
+  if (!finalTitle) {
+    finalTitle = `探索${tripPlan.cityPlans?.[0]?.cityName || '世界'}的奇妙世界 ✨ ${tripPlan.title || ''}`;
+  }
+
+  const newPost = {
+    id: `post-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    title: finalTitle,
+    description: finalDesc,
+    tags: tags && tags.length ? tags : ['旅行路线', '分享社区', '定制方案'],
+    author: author || '神秘旅行家 🗺️',
+    upvotes: 1,
+    createdAt: new Date().toISOString(),
+    comments: [],
+    tripPlan
+  };
+
+  posts.unshift(newPost);
+  saveForumPosts(posts);
+
+  res.json({ success: true, post: newPost });
+});
+
+// 3. Upvote/Like forum post
+app.post('/api/forum/posts/:id/upvote', (req, res) => {
+  const { id } = req.params;
+  const posts = loadForumPosts();
+  const index = posts.findIndex(p => p.id === id);
+  if (index !== -1) {
+    posts[index].upvotes = (posts[index].upvotes || 0) + 1;
+    saveForumPosts(posts);
+    return res.json({ success: true, upvotes: posts[index].upvotes });
+  }
+  res.status(404).json({ success: false, error: 'Post not found.' });
+});
+
+// 4. Add comment to forum post
+app.post('/api/forum/posts/:id/comment', (req, res) => {
+  const { id } = req.params;
+  const { author, text } = req.body;
+  if (!text) {
+    return res.status(400).json({ success: false, error: 'Comment text cannot be empty.' });
+  }
+
+  const posts = loadForumPosts();
+  const index = posts.findIndex(p => p.id === id);
+  if (index !== -1) {
+    const newComment = {
+      id: `comment-${Date.now()}-${Math.random().toString(36).substring(2, 4)}`,
+      author: (author || '').trim() || '热心旅伴 🎒',
+      text: text.trim(),
+      createdAt: new Date().toISOString()
+    };
+    posts[index].comments = posts[index].comments || [];
+    posts[index].comments.push(newComment);
+    saveForumPosts(posts);
+    return res.json({ success: true, comments: posts[index].comments });
+  }
+  res.status(404).json({ success: false, error: 'Post not found.' });
 });
 
 // Initialize server-side Firestore

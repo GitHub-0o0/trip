@@ -43,6 +43,7 @@ export interface TranslationDict {
   navSettings: string;
   navCompare: string;
   navReceipts: string;
+  navForum: string;
   receiptsTitle: string;
   receiptsSub: string;
   btnClearCache: string;
@@ -121,6 +122,7 @@ export const translations: { [lang: string]: TranslationDict } = {
     navHistory: '收藏夹',
     navSettings: '设置中心',
     navReceipts: '票据归并',
+    navForum: '漫游广场',
     receiptsTitle: '智能旅客票据行程归并箱',
     receiptsSub: '支持拖拽或选择您的机票订单 PDF、高铁购票截图、酒店预定确认单或餐饮发票，AI 将秒级抓取多站行程，并智能合流归编至您的行程计划中！',
     btnClearCache: '清理全部本地缓存及历史计划',
@@ -197,6 +199,7 @@ export const translations: { [lang: string]: TranslationDict } = {
     navHistory: 'Favorites Archive',
     navSettings: 'Preferences',
     navReceipts: 'Invoice Merge',
+    navForum: 'Community Feed',
     receiptsTitle: 'Smart Ticket & Itinerary Ledger',
     receiptsSub: 'Drag and drop PDFs or screenshots of flights, high-speed rail receipts, hotel confirmations, or attraction gates. AI parses routes and merges them directly into your dynamic calendar!',
     btnClearCache: 'Reset Database, Archives & Cache',
