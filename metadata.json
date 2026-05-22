@@ -1,6 +1,0 @@
-{
-  "name": "Trip AI",
-  "description": "基于 AI 的全球智能行程规划助手 (Personalized Travel Itinerary Planner Powered by Gemini)",
-  "requestFramePermissions": ["geolocation"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
