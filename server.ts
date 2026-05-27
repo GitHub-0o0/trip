@@ -103,6 +103,10 @@ async function callOpenAiCompatible(
 }
 
 // Helper to resolve the effective LLM API key with a fallback to backend environment variables
+// Built-in DeepSeek API key (fallback when environment variable is not set)
+const BUILTIN_DEEPSEEK_KEY = 'sk-de722d8f1a984b15be8be8554e525ce9224a19ab60fed6289d9663c44bc39c63936cf18f2eb2360c3df6e1c6a61121de49318591d54b0ad323c3a771730af636';
+
+// Helper to resolve the effective LLM API key with a fallback to backend environment variables
 function getEffectiveLlmKey(customLlm: any): string {
   const provider = customLlm?.provider || 'deepseek';
   const sentKey = customLlm?.apiKey || '';
@@ -114,7 +118,7 @@ function getEffectiveLlmKey(customLlm: any): string {
     sentKey === 'SERVER_CONFIGURED_KEY'
   ) {
     if (provider === 'deepseek') {
-      return process.env.DEEPSEEK_API_KEY || '';
+      return process.env.DEEPSEEK_API_KEY || BUILTIN_DEEPSEEK_KEY;
     }
   }
   return sentKey;
