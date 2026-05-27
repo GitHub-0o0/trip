@@ -17,6 +17,18 @@
           "type": "object",
           "description": "The complete itinerary data payload containing days, budgets, POIs and transits"
         },
+        "peers": {
+          "type": "object",
+          "description": "The list of currently active devices collaborating on this travel plan"
+        },
+        "notes": {
+          "type": "array",
+          "description": "An array of collaborative checklist notes and trip remarks"
+        },
+        "history": {
+          "type": "array",
+          "description": "The changelog ledger tracing edit steps of active connected devices"
+        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
@@ -29,12 +41,61 @@
         }
       },
       "required": ["id", "code", "tripPlan", "updatedAt", "createdAt"]
+    },
+    "ForumPost": {
+      "title": "Community Travel Plan Post",
+      "description": "A shared tourist spotlight route or experience published to the global itinerary forum",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique system post ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Visual title of the travel recommendation"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed text write-up summarizing travel highlights"
+        },
+        "tags": {
+          "type": "array",
+          "description": "A list of theme tags indexing this travel report"
+        },
+        "author": {
+          "type": "string",
+          "description": "Display name of the tourist path author"
+        },
+        "upvotes": {
+          "type": "integer",
+          "description": "Total upvote counts collected from the community"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The date-time when the post was compiled"
+        },
+        "comments": {
+          "type": "array",
+          "description": "An array containing discussion replies from travelers"
+        },
+        "tripPlan": {
+          "type": "object",
+          "description": "The attached TripPlan data object"
+        }
+      },
+      "required": ["id", "title", "description", "tags", "author", "upvotes", "createdAt", "tripPlan"]
     }
   },
   "firestore": {
     "/sync_plans/{planId}": {
       "schema": "SyncPlan",
       "description": "Collection storing shared real-time travel itineraries"
+    },
+    "/forum_posts/{postId}": {
+      "schema": "ForumPost",
+      "description": "Collection storing community recommendations and public itineraries"
     }
   }
 }

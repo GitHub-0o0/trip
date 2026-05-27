@@ -74,6 +74,12 @@ export interface TripPlan {
   transits: { [cityId: string]: TransitInfo }; // transit route to this city
   totalBudget: number;
   totalDays: number;
+  departureDate?: string; // "YYYY-MM-DD" e.g., "2026-05-28"
+  departureTime?: string; // "HH:MM" e.g., "09:00"
+  returnDate?: string; // "YYYY-MM-DD"
+  returnTime?: string; // "HH:MM"
+  travelMode?: string; // "flight" | "train" | "car" | "all"
+  travelerCount?: number;
 }
 
 export interface CityIndex {

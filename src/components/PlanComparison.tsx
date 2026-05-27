@@ -7,6 +7,7 @@ import React from 'react';
 import { DetailedCityPlan, TransitInfo, CityIndex } from '../types';
 import { TranslationDict } from '../data/i18n';
 import { ALL_CITIES_INDEX } from '../data/cities';
+import { getStoredExchangeRates, getScaledLocalExpense } from '../utils/exchange';
 import { Compass, Sparkles, Scale, AlertCircle } from 'lucide-react';
 
 interface PlanComparisonProps {
@@ -14,9 +15,10 @@ interface PlanComparisonProps {
   lang: 'zh' | 'en';
   cityPlans: DetailedCityPlan[];
   transits: { [cityId: string]: TransitInfo };
+  travelerCount?: number;
 }
 
-export default function PlanComparison({ t, lang, cityPlans, transits }: PlanComparisonProps) {
+export default function PlanComparison({ t, lang, cityPlans, transits, travelerCount = 1 }: PlanComparisonProps) {
   // Evaluates if city matches May ideal tourism timeline (spring/early-summer is gorgeous in Kyoto, Tokyo, Paris, Beijing, Hangzhou, Guilin, etc.)
   const isIdealForMay = (cityId: string): boolean => {
     const ideals = ['tokyo', 'kyoto', 'paris', 'beijing', 'hangzhou', 'guilin', 'xiamen', 'kunming'];
@@ -87,13 +89,20 @@ export default function PlanComparison({ t, lang, cityPlans, transits }: PlanCom
           <tbody className="divide-y divide-slate-200 font-medium text-slate-700">
             {cityPlans.map((plan) => {
               const transit = transits[plan.cityId];
-              const transitCost = transit ? transit.cost * 2 : 0; // roundtrip transit estimate
-              const tickets = plan.localExpense.tickets;
-              const food = plan.localExpense.food;
-              const hotel = plan.localExpense.hotel;
-              const localTransit = plan.localExpense.transit;
+              const transitCost = transit ? (transit.cost * 2) * travelerCount : 0; // roundtrip transit estimate scaled by travelerCount
+              const scaledLocal = getScaledLocalExpense(plan.localExpense, travelerCount, plan.isAiEnhanced);
+              const tickets = scaledLocal.tickets;
+              const food = scaledLocal.food;
+              const hotel = scaledLocal.hotel;
+              const localTransit = scaledLocal.transit;
               const localSum = tickets + food + hotel + localTransit;
               const citySumTotal = transitCost + localSum;
+
+              const rates = getStoredExchangeRates();
+              const usdRate = rates.CNY || 7.24;
+              const transitCostUsd = Math.round(transitCost / usdRate);
+              const localSumUsd = Math.round(localSum / usdRate);
+              const citySumTotalUsd = Math.round(citySumTotal / usdRate);
 
               const isIdeal = isIdealForMay(plan.cityId);
               const tags = getCityTags(plan.cityId);
@@ -109,7 +118,10 @@ export default function PlanComparison({ t, lang, cityPlans, transits }: PlanCom
                   <td className="px-4 py-4.5">
                     <div className="flex flex-col">
                       <span className="font-extrabold text-slate-900">
-                        {lang === 'zh' ? '¥' : '$'}{transitCost}
+                        ¥{transitCost}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        {lang === 'en' ? `(approx. $${transitCostUsd})` : `(约 $${transitCostUsd})`}
                       </span>
                       <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5 tracking-wider">
                         {transit ? (lang === 'zh' ? transit.type === 'flight' ? '双程飞机' : '高铁往返' : transit.type) : '-'}
@@ -119,7 +131,10 @@ export default function PlanComparison({ t, lang, cityPlans, transits }: PlanCom
                   <td className="px-4 py-4.5">
                     <div className="flex flex-col">
                       <span className="font-extrabold text-slate-900">
-                        {lang === 'zh' ? '¥' : '$'}{localSum}
+                        ¥{localSum}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        {lang === 'en' ? `(approx. $${localSumUsd})` : `(约 $${localSumUsd})`}
                       </span>
                       <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5 tracking-wider">
                         {lang === 'zh' ? `${plan.daysCount}天在当地吃住行` : `${plan.daysCount}d onsite stay`}
@@ -127,7 +142,12 @@ export default function PlanComparison({ t, lang, cityPlans, transits }: PlanCom
                     </div>
                   </td>
                   <td className="px-4 py-4.5 font-sans font-extrabold text-blue-600 text-sm">
-                    {lang === 'zh' ? '¥' : '$'}{citySumTotal}
+                    <div className="flex flex-col">
+                      <span>¥{citySumTotal}</span>
+                      <span className="text-[9px] text-slate-400 font-bold">
+                        {lang === 'en' ? `($${citySumTotalUsd})` : `(约 $${citySumTotalUsd})`}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-4 py-4.5 text-center">
                     {isIdeal ? (

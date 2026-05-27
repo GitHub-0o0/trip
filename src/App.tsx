@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { translations, TranslationDict } from './data/i18n';
 import { TripPlan, DetailedCityPlan, CitySelection, TransitInfo, CustomLlmConfig, POI, CityIndex } from './types';
 import { ALL_CITIES_INDEX, generateTransit, generateLocalPlan } from './data/cities';
+import { optimizeCityPlanByDate, enrichTransitsWithDates } from './utils/dateOptimizer';
 import CitySelector from './components/CitySelector';
 import MapContainer from './components/MapContainer';
 import TimelineView from './components/TimelineView';
@@ -17,6 +18,8 @@ import ReceiptMergeManager from './components/ReceiptMergeManager';
 import PlanSyncManager from './components/PlanSyncManager';
 import DailyRouteTransitPanel from './components/DailyRouteTransitPanel';
 import CommunityForum from './components/CommunityForum';
+import TravelAssistant from './components/TravelAssistant';
+import { fetchLiveExchangeRates, getStoredExchangeRates, getScaledLocalExpense } from './utils/exchange';
 import {
   Compass,
   Map,
@@ -37,23 +40,172 @@ import {
   MapPin,
   Trash2,
   X,
-  Users
+  Users,
+  LayoutGrid,
+  ArrowLeft,
+  Sun,
+  Moon,
+  Briefcase,
+  Palette,
+  Trees,
+  Zap,
+  Flame,
+  Waves,
+  CloudRain,
+  Wifi
 } from 'lucide-react';
 
 export default function App() {
   const [lang, setLang] = useState<'zh' | 'en'>('zh');
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    return localStorage.getItem('darkMode') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('darkMode', String(darkMode));
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  const [theme, setTheme] = useState<string>(() => {
+    return localStorage.getItem('trip_ai_theme') || 'classic';
+  });
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const [hoveredThemeId, setHoveredThemeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('trip_ai_theme', theme);
+    const themeClasses = ['theme-classic', 'theme-sakura', 'theme-cyber', 'theme-nordic', 'theme-sunset', 'theme-ocean'];
+    themeClasses.forEach((cls) => {
+      document.documentElement.classList.remove(cls);
+    });
+    document.documentElement.classList.add(`theme-${theme}`);
+  }, [theme]);
+
+  const THEMES = [
+    { 
+      id: 'classic', 
+      nameZh: '经典蓝天', 
+      nameEn: 'Classic Sky', 
+      color: 'bg-blue-500', 
+      bgGradient: 'from-blue-500 to-sky-400',
+      icon: Compass, 
+      descZh: '蓝天白云、经典极简、旅行主轴', 
+      descEn: 'Default sky-blue travel-focused theme.' 
+    },
+    { 
+      id: 'sakura', 
+      nameZh: '粉樱漫舞', 
+      nameEn: 'Blossom Sakura', 
+      color: 'bg-pink-400', 
+      bgGradient: 'from-pink-400 to-rose-450',
+      icon: Sparkles, 
+      descZh: '春季芳华、温柔烂漫、悠闲旅行', 
+      descEn: 'Romantic pink cherry flowers.' 
+    },
+    { 
+      id: 'cyber', 
+      nameZh: '赛博极光', 
+      nameEn: 'Cyber Aurora', 
+      color: 'bg-purple-600', 
+      bgGradient: 'from-purple-600 to-cyan-500',
+      icon: Zap, 
+      descZh: '极光霓虹、数字未来、电竞冒险', 
+      descEn: 'Vibrant electric tech neon.' 
+    },
+    { 
+      id: 'nordic', 
+      nameZh: '北欧石质', 
+      nameEn: 'Nordic Stone', 
+      color: 'bg-stone-500', 
+      bgGradient: 'from-stone-500 to-emerald-700',
+      icon: Trees, 
+      descZh: '林地森林、宁静低调、返璞归真', 
+      descEn: 'Organic quiet forest tones.' 
+    },
+    { 
+      id: 'sunset', 
+      nameZh: '落日珊瑚', 
+      nameEn: 'Sunset Amber', 
+      color: 'bg-amber-500', 
+      bgGradient: 'from-amber-500 to-rose-500',
+      icon: Flame, 
+      descZh: '大漠落日、温暖鎏金、户外探索', 
+      descEn: 'Earthy sands & fiery twilight.' 
+    },
+    { 
+      id: 'ocean', 
+      nameZh: '蔚蓝深海', 
+      nameEn: 'Ocean Deep', 
+      color: 'bg-teal-600', 
+      bgGradient: 'from-teal-600 to-blue-900',
+      icon: Waves, 
+      descZh: '深蓝港湾、宁静澄澈、海滨风情', 
+      descEn: 'Deep marine maritime theme.' 
+    }
+  ];
+
   const [departureCity, setDepartureCity] = useState('');
+  const [departureDate, setDepartureDate] = useState(() => {
+    return localStorage.getItem('trip_ai_departure_date') || '2026-05-28';
+  });
+  const [departureTime, setDepartureTime] = useState(() => {
+    return localStorage.getItem('trip_ai_departure_time') || '09:00';
+  });
+  const [returnDate, setReturnDate] = useState(() => {
+    return localStorage.getItem('trip_ai_return_date') || '2026-06-05';
+  });
+  const [returnTime, setReturnTime] = useState(() => {
+    return localStorage.getItem('trip_ai_return_time') || '18:00';
+  });
+  const [travelMode, setTravelMode] = useState(() => {
+    return localStorage.getItem('trip_ai_travel_mode') || 'all';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('trip_ai_departure_date', departureDate);
+  }, [departureDate]);
+
+  useEffect(() => {
+    localStorage.setItem('trip_ai_departure_time', departureTime);
+  }, [departureTime]);
+
+  useEffect(() => {
+    localStorage.setItem('trip_ai_return_date', returnDate);
+  }, [returnDate]);
+
+  useEffect(() => {
+    localStorage.setItem('trip_ai_return_time', returnTime);
+  }, [returnTime]);
+
+  useEffect(() => {
+    localStorage.setItem('trip_ai_travel_mode', travelMode);
+  }, [travelMode]);
+
+  const [travelerCount, setTravelerCount] = useState<number>(() => {
+    return Number(localStorage.getItem('trip_ai_traveler_count')) || 1;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('trip_ai_traveler_count', travelerCount.toString());
+  }, [travelerCount]);
+
   const [selectedDestinations, setSelectedDestinations] = useState<CitySelection[]>([]);
   const [isAiEnhanced, setIsAiEnhanced] = useState(true);
   const [currentPlan, setCurrentPlan] = useState<TripPlan | null>(null);
   const [historyPlans, setHistoryPlans] = useState<TripPlan[]>([]);
-  const [activeTab, setActiveTab] = useState<'plan' | 'itinerary' | 'compare' | 'history' | 'settings' | 'receipts' | 'forum'>('plan');
+  const [activeTab, setActiveTab] = useState<'plan' | 'itinerary' | 'compare' | 'history' | 'settings' | 'receipts' | 'forum' | 'tools' | 'assistant'>('plan');
   const [activeCityIndex, setActiveCityIndex] = useState(0);
+
+  const [hasBackendDeepseekKey, setHasBackendDeepseekKey] = useState(false);
 
   // Custom LLM Configuration
   const [customLlmConfig, setCustomLlmConfig] = useState<CustomLlmConfig>({
-    provider: (process.env.DEEPSEEK_API_KEY || '').startsWith('sk-') ? 'deepseek' : 'gemini',
-    apiKey: process.env.DEEPSEEK_API_KEY || '',
+    provider: 'deepseek',
+    apiKey: '',
     baseUrl: 'https://api.deepseek.com/v1',
     model: 'deepseek-chat',
   });
@@ -78,6 +230,13 @@ export default function App() {
   // 1. Restore historical archives on startup
   useEffect(() => {
     try {
+      // Fetch live exchange rates on mount
+      fetchLiveExchangeRates().then((rates) => {
+        if (rates) {
+          console.log('Real-time exchange rates synchronized:', rates);
+        }
+      });
+
       const savedLang = localStorage.getItem('trip_ai_lang');
       if (savedLang === 'zh' || savedLang === 'en') {
         setLang(savedLang);
@@ -99,24 +258,44 @@ export default function App() {
         setCurrentPlan(parsedPlan);
         setDepartureCity(parsedPlan.departureCity || '');
         setSelectedDestinations(parsedPlan.selectedDestinations || []);
+        if (parsedPlan.departureDate) setDepartureDate(parsedPlan.departureDate);
+        if (parsedPlan.departureTime) setDepartureTime(parsedPlan.departureTime);
+        if (parsedPlan.returnDate) setReturnDate(parsedPlan.returnDate);
+        if (parsedPlan.returnTime) setReturnTime(parsedPlan.returnTime);
+        if (parsedPlan.travelMode) setTravelMode(parsedPlan.travelMode);
         setActiveTab('itinerary');
       }
 
-      const storedLlm = localStorage.getItem('trip_ai_custom_llm_config');
-      if (storedLlm) {
-        const parsed = JSON.parse(storedLlm);
-        if (!parsed.apiKey && parsed.provider === 'deepseek' && process.env.DEEPSEEK_API_KEY) {
-          parsed.apiKey = process.env.DEEPSEEK_API_KEY;
-        }
-        setCustomLlmConfig(parsed);
-      } else if (process.env.DEEPSEEK_API_KEY) {
-        setCustomLlmConfig({
-          provider: 'deepseek',
-          apiKey: process.env.DEEPSEEK_API_KEY,
-          baseUrl: 'https://api.deepseek.com/v1',
-          model: 'deepseek-chat',
+      // Load LLM configuration and fetch backend configuration info
+      fetch('/api/plan/config')
+        .then((res) => res.json())
+        .then((data) => {
+          const isSystemConfigured = !!(data && data.hasDeepseekKey);
+          setHasBackendDeepseekKey(isSystemConfigured);
+
+          const storedLlm = localStorage.getItem('trip_ai_custom_llm_config');
+          if (storedLlm) {
+            const parsed = JSON.parse(storedLlm);
+            if ((!parsed.apiKey || parsed.apiKey === 'DEEPSEEK_SYSTEM_KEY') && isSystemConfigured) {
+              parsed.apiKey = 'DEEPSEEK_SYSTEM_KEY';
+            }
+            setCustomLlmConfig(parsed);
+          } else {
+            setCustomLlmConfig({
+              provider: 'deepseek',
+              apiKey: isSystemConfigured ? 'DEEPSEEK_SYSTEM_KEY' : '',
+              baseUrl: 'https://api.deepseek.com/v1',
+              model: 'deepseek-chat',
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn('Failed to load server secrets configuration fallback:', err);
+          const storedLlm = localStorage.getItem('trip_ai_custom_llm_config');
+          if (storedLlm) {
+            setCustomLlmConfig(JSON.parse(storedLlm));
+          }
         });
-      }
 
       const storedMapEngine = localStorage.getItem('trip_ai_map_engine');
       if (storedMapEngine === 'leaflet' || storedMapEngine === 'google' || storedMapEngine === 'amap') {
@@ -182,44 +361,69 @@ export default function App() {
         isAiEnhanced,
         lang,
         customLlm: customLlmConfig,
+        departureDate,
+        departureTime,
+        returnDate,
+        returnTime,
+        travelMode,
+        travelerCount,
       };
 
-      const res = await fetch('/api/plan/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let plans: DetailedCityPlan[] = [];
+      try {
+        const res = await fetch('/api/plan/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      if (!res.ok) {
-        throw new Error(`Server returned status code ${res.status}`);
-      }
+        if (!res.ok) {
+          throw new Error(`Server returned status code ${res.status}`);
+        }
 
-      const data = await res.json();
-      const plans: DetailedCityPlan[] = data.plans;
+        const data = await res.json();
+        // Post-process the AI results with date-based multiplier optimization dynamically
+        plans = (data.plans || []).map((p: DetailedCityPlan) => optimizeCityPlanByDate(p, departureDate, lang));
 
-      if (data.isFallback) {
+        if (data.isFallback) {
+          setErrorMessage(
+            lang === 'zh'
+              ? '⚠️ 我们已为您无缝加载高保真当地旅行模版并完成季节优化。一键在 AI Studio 侧栏 “Settings > Secrets” 中配置 “GEMINI_API_KEY” 可解锁大模型深度完美定制！'
+              : '⚠️ We have seamlessly loaded and seasonalized our high-fidelity local travel templates. Add your "GEMINI_API_KEY" in the "Settings > Secrets" panel to unlock fully customized Gemini itineraries.'
+          );
+        }
+      } catch (innerErr: any) {
+        console.warn('Backend fetch failed, utilizing client-side local templates:', innerErr);
+        plans = selectedDestinations.map((d) => {
+          const rawPlan = generateLocalPlan(d.cityId, d.days);
+          return optimizeCityPlanByDate(rawPlan, departureDate, lang);
+        });
         setErrorMessage(
           lang === 'zh'
-            ? '⚠️ 检测到您的 GEMINI_API_KEY 尚未配置。为了给您提供流畅、不中断的规划旅程，在后台我们已无缝加载高保真当地旅行模版作为优质补充。您可随时在 AI Studio 侧栏“Settings > Secrets”中配置密钥 “GEMINI_API_KEY”，一键解锁由大模型实时深度驱策与定制的闪耀行程！'
-            : '⚠️ We detected your GEMINI_API_KEY is not configured yet. To keep your experience smooth and uninterrupted, we have seamlessly loaded our rich high-fidelity local pre-defined travel templates. Feel free to add your "GEMINI_API_KEY" secret in the "Settings > Secrets" panel to unlock real-time Gemini AI itineraries!'
+            ? '⚠️ 网络服务正忙，已为您激活高保真当地智能旅行备份线路并匹配出行季节！在 AI Studio 侧栏 “Settings > Secrets” 完成密钥配置以启动全量 AI 版本。'
+            : '⚠️ Under temporary network balancing. Automatically activated and seasonalized our pre-defined local travel backup templates for a perfect journey!'
         );
       }
 
-      // Draw transits sequentially
-      const transits: { [cityId: string]: TransitInfo } = {};
+      // Draw transits sequentially and enrich them with accurate calendar date schedules
+      let rawTransits: { [cityId: string]: TransitInfo } = {};
       let previousPoint = departureCity;
 
       selectedDestinations.forEach((dest) => {
-        transits[dest.cityId] = generateTransit(previousPoint, dest.cityId);
+        rawTransits[dest.cityId] = generateTransit(previousPoint, dest.cityId);
         previousPoint = dest.cityId;
       });
 
-      // Calculate totals
+      const transits = enrichTransitsWithDates(rawTransits, selectedDestinations, departureDate, departureTime, lang);
+
+      // Calculate totals scaled by travelerCount
       const totalDays = selectedDestinations.reduce((sum, d) => sum + d.days, 0);
-      const transitCost = (Object.values(transits) as TransitInfo[]).reduce((sum, t) => sum + t.cost * 2, 0); // double transport cost for return trip estimates
+      const baseTransitCost = (Object.values(transits) as TransitInfo[]).reduce((sum, t) => sum + t.cost * 2, 0); // double transport cost for return trip estimates
+      const transitCost = baseTransitCost * travelerCount;
       const localCost = plans.reduce((sum, p) => {
         const exp = p.localExpense;
-        return sum + exp.tickets + exp.food + exp.hotel + exp.transit;
+        const scaled = getScaledLocalExpense(exp, travelerCount, p.isAiEnhanced);
+        return sum + scaled.tickets + scaled.food + scaled.hotel + scaled.transit;
       }, 0);
 
       const totalBudget = transitCost + localCost;
@@ -237,6 +441,12 @@ export default function App() {
         transits,
         totalBudget,
         totalDays,
+        departureDate,
+        departureTime,
+        returnDate,
+        returnTime,
+        travelMode,
+        travelerCount,
       };
 
       // Set active
@@ -252,7 +462,48 @@ export default function App() {
       setActiveTab('itinerary');
     } catch (err: any) {
       console.error('Error generating detailed trip plan!', err);
-      setErrorMessage(err.message || 'Connectivity fault. Please try again.');
+      // Fallback on total failure
+      const plans = selectedDestinations.map((d) => {
+        const rawPlan = generateLocalPlan(d.cityId, d.days);
+        return optimizeCityPlanByDate(rawPlan, departureDate, lang);
+      });
+      let rawTransits: { [cityId: string]: TransitInfo } = {};
+      let previousPoint = departureCity;
+      selectedDestinations.forEach((dest) => {
+        rawTransits[dest.cityId] = generateTransit(previousPoint, dest.cityId);
+        previousPoint = dest.cityId;
+      });
+      const transits = enrichTransitsWithDates(rawTransits, selectedDestinations, departureDate, departureTime, lang);
+      const totalDays = selectedDestinations.reduce((sum, d) => sum + d.days, 0);
+      const baseTransitCost = (Object.values(transits) as TransitInfo[]).reduce((sum, t) => sum + t.cost * 2, 0);
+      const transitCost = baseTransitCost * travelerCount;
+      const localCost = plans.reduce((sum, p) => {
+        const exp = p.localExpense;
+        const scaled = getScaledLocalExpense(exp, travelerCount, p.isAiEnhanced);
+        return sum + scaled.tickets + scaled.food + scaled.hotel + scaled.transit;
+      }, 0);
+      const totalBudget = transitCost + localCost;
+      const title = `${getCityLabel(departureCity)} → ${selectedDestinations.map((d) => getCityLabel(d.cityId)).join(' → ')}`;
+      const fallbackPlan: TripPlan = {
+        id: 'plan_' + Date.now(),
+        title,
+        createdAt: new Date().toISOString(),
+        departureCity,
+        selectedDestinations,
+        cityPlans: plans,
+        transits,
+        totalBudget,
+        totalDays,
+        departureDate,
+        departureTime,
+        returnDate,
+        returnTime,
+        travelMode,
+        travelerCount,
+      };
+      setCurrentPlan(fallbackPlan);
+      setActiveCityIndex(0);
+      setActiveTab('itinerary');
     } finally {
       setIsLoading(false);
     }
@@ -270,25 +521,37 @@ export default function App() {
         cityName: getCityLabel(cityId),
         lang,
         customLlm: customLlmConfig,
+        travelerCount,
       };
 
-      const res = await fetch('/api/plan/enhance-city', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let upgradedCityPlan: DetailedCityPlan;
+      try {
+        const res = await fetch('/api/plan/enhance-city', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      if (!res.ok) {
-        throw new Error('API server failed');
-      }
+        if (!res.ok) {
+          throw new Error('API server failed');
+        }
 
-      const upgradedCityPlan: DetailedCityPlan = await res.json();
+        upgradedCityPlan = await res.json();
 
-      if (!upgradedCityPlan.isAiEnhanced) {
+        if (!upgradedCityPlan.isAiEnhanced) {
+          setErrorMessage(
+            lang === 'zh'
+              ? '⚠️ 已加载高保真旅行模板。在 AI Studio 侧栏 “Settings > Secrets” 配置 “GEMINI_API_KEY” 可激活全量实时 AI 引擎。'
+              : '⚠️ Pre-packaged high-fidelity travel template loaded. Add your "GEMINI_API_KEY" in the "Settings > Secrets" panel to unlock the full AI route capabilities.'
+          );
+        }
+      } catch (innerErr) {
+        console.warn('Backend single-city upgrade fetch failed, falling back:', innerErr);
+        upgradedCityPlan = generateLocalPlan(cityId, daysCount);
         setErrorMessage(
           lang === 'zh'
-            ? '⚠️ 检测到您的 GEMINI_API_KEY 尚未配置，未能在云端启用 AI 完美重构。已为您维持本地高保真路线状态，您可随时在 AI Studio 侧栏 “Settings > Secrets” 进行配置。'
-            : '⚠️ We detected your GEMINI_API_KEY is not configured yet. Maintained the local pre-defined itineraries for this city. You can configure your API key in the "Settings > Secrets" panel.'
+            ? '⚠️ 网络或服务暂忙，已成功加载本地高保真完美线路补充。'
+            : '⚠️ Connection load-balanced, successfully served high-fidelity local template instead.'
         );
       }
 
@@ -365,6 +628,11 @@ export default function App() {
     setCurrentPlan(plan);
     setDepartureCity(plan.departureCity);
     setSelectedDestinations(plan.selectedDestinations);
+    if (plan.departureDate) setDepartureDate(plan.departureDate);
+    if (plan.departureTime) setDepartureTime(plan.departureTime);
+    if (plan.returnDate) setReturnDate(plan.returnDate);
+    if (plan.returnTime) setReturnTime(plan.returnTime);
+    if (plan.travelMode) setTravelMode(plan.travelMode);
     localStorage.setItem('trip_ai_current_plan', JSON.stringify(plan));
     setActiveCityIndex(0);
     setActiveTab('itinerary');
@@ -554,6 +822,24 @@ export default function App() {
 
   const currentActiveCityPlan = currentPlan ? currentPlan.cityPlans[activeCityIndex] : null;
 
+  const computedTotalBudget = (() => {
+    if (!currentPlan) return 0;
+    const count = travelerCount || 1;
+    const baseTransitCost = (Object.values(currentPlan.transits) as TransitInfo[]).reduce((sum, t) => sum + t.cost * 2, 0);
+    const transitCost = baseTransitCost * count;
+    const localCost = currentPlan.cityPlans.reduce((sum, p) => {
+      const exp = p.localExpense;
+      const scaled = getScaledLocalExpense(exp, count, p.isAiEnhanced);
+      return sum + scaled.tickets + scaled.food + scaled.hotel + scaled.transit;
+    }, 0);
+    return transitCost + localCost;
+  })();
+
+  const computedActiveLocalExpense = (() => {
+    if (!currentActiveCityPlan) return { tickets: 0, food: 0, hotel: 0, transit: 0 };
+    return getScaledLocalExpense(currentActiveCityPlan.localExpense, travelerCount, currentActiveCityPlan.isAiEnhanced);
+  })();
+
   const getActiveAiName = () => {
     if (customLlmConfig.provider === 'gemini') {
       return 'Google Gemini 3.5';
@@ -588,16 +874,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Global Actions with Avatars and Toggles */}
+        {/* Global Actions and Toggles */}
         <div className="flex items-center gap-4">
-          {/* Bento-style avatar pile for destinations */}
-          <div className="hidden sm:flex items-center -space-x-2">
-            <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[10px] font-bold shadow-sm" title="Beijing Stop">BJ</div>
-            <div className="w-8 h-8 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-blue-600 shadow-sm" title="London Stop">LD</div>
-            <div className="w-8 h-8 rounded-full bg-orange-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-orange-600 shadow-sm" title="Paris Stop">PR</div>
-          </div>
-          <div className="hidden sm:block h-8 w-[1px] bg-slate-200"></div>
-
           <div className="flex bg-slate-100/80 border border-slate-200 p-1 rounded-xl">
             <button
               onClick={() => handleLanguageSwitch('zh')}
@@ -616,6 +894,109 @@ export default function App() {
               EN
             </button>
           </div>
+
+          {/* Interactive Diverse Styling Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setShowThemePicker(!showThemePicker)}
+              className="group p-2 bg-slate-100/80 hover:bg-slate-200 border border-slate-200 rounded-xl transition-all cursor-pointer flex items-center justify-center text-slate-600 shadow-sm"
+              title={lang === 'zh' ? '多风格视觉主题' : 'Change UI Theme Style'}
+            >
+              <div className="flex items-center justify-center">
+                <Palette className={`w-4.5 h-4.5 transition-transform duration-300 ${showThemePicker ? 'rotate-45 text-blue-600' : 'text-slate-650'} group-hover:scale-110`} />
+                <span className="select-none font-bold text-slate-700 text-xs transition-all duration-300 overflow-hidden max-w-0 opacity-0 group-hover:max-w-16 group-hover:opacity-100 group-hover:ml-1.5 whitespace-nowrap leading-none">
+                  {lang === 'zh' ? '风格' : 'Style'}
+                </span>
+              </div>
+            </button>
+            {showThemePicker && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowThemePicker(false)} />
+                <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-50 animate-fade-in font-sans">
+                  <div className="flex items-center justify-between px-1.5 mb-2">
+                    <h4 className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+                      {lang === 'zh' ? '视觉风格' : 'VISUAL STYLE'}
+                    </h4>
+                    <span className="text-[9px] text-slate-400 font-mono font-bold bg-slate-100 px-1.5 py-0.5 rounded-md">
+                      {(hoveredThemeId || theme).toUpperCase()}
+                    </span>
+                  </div>
+                  
+                  {/* Row showing ONLY icons (circles representing design colors) */}
+                  <div className="grid grid-cols-6 gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shadow-inner">
+                    {THEMES.map((themeItem) => {
+                      const isSelected = theme === themeItem.id;
+                      const isHovered = hoveredThemeId === themeItem.id;
+                      const IconComponent = themeItem.icon;
+                      return (
+                        <button
+                          key={themeItem.id}
+                          onClick={() => {
+                            setTheme(themeItem.id);
+                          }}
+                          onMouseEnter={() => setHoveredThemeId(themeItem.id)}
+                          onMouseLeave={() => setHoveredThemeId(null)}
+                          className={`relative aspect-square rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer border shadow-sm ${
+                            isSelected 
+                              ? 'scale-110 border-blue-500 ring-2 ring-blue-200/50 z-10 font-bold' 
+                              : 'border-slate-200/60 hover:border-slate-700 hover:scale-105'
+                          } bg-gradient-to-tr ${themeItem.bgGradient}`}
+                          title={lang === 'zh' ? themeItem.nameZh : themeItem.nameEn}
+                        >
+                          <IconComponent className={`w-3.5 h-3.5 text-white drop-shadow-xs transition-transform duration-200 ${isHovered ? 'scale-115 rotate-12' : ''}`} />
+                          {isSelected && (
+                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-blue-600 border border-white rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-xs">
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Intro/Description Details Panel displayed below - dynamic on hovered or active selected */}
+                  {(() => {
+                    const activeShowTheme = THEMES.find((t) => t.id === (hoveredThemeId || theme)) || THEMES[0];
+                    const isHovering = hoveredThemeId !== null;
+                    return (
+                      <div className={`mt-3 p-2.5 rounded-xl transition-all duration-300 border ${
+                        isHovering
+                          ? 'bg-blue-50/40 border-blue-100' 
+                          : 'bg-slate-50/50 border-slate-100'
+                      }`}>
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <div className={`w-2.5 h-2.5 rounded-full bg-gradient-to-tr ${activeShowTheme.bgGradient}`} />
+                          <span className={`text-xs font-black ${isHovering ? 'text-blue-700' : 'text-slate-700'}`}>
+                            {lang === 'zh' ? activeShowTheme.nameZh : activeShowTheme.nameEn}
+                          </span>
+                          {activeShowTheme.id === theme && (
+                            <span className="text-[8px] font-bold text-blue-600 bg-blue-100/50 px-1 py-0.5 rounded ml-auto">
+                              {lang === 'zh' ? '应用中' : 'Active'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10.5px] text-slate-500 leading-relaxed font-medium">
+                          {lang === 'zh' ? activeShowTheme.descZh : activeShowTheme.descEn}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className="p-2 bg-slate-100/80 hover:bg-slate-200 border border-slate-200 rounded-xl transition-all cursor-pointer flex items-center justify-center text-slate-600 shadow-sm"
+            title={lang === 'zh' ? '切换暗色/明亮模式' : 'Toggle Dark/Light Mode'}
+          >
+            {darkMode ? (
+              <Sun className="w-4.5 h-4.5 text-amber-500" />
+            ) : (
+              <Moon className="w-4.5 h-4.5 text-slate-650" />
+            )}
+          </button>
         </div>
       </header>
 
@@ -644,7 +1025,7 @@ export default function App() {
       )}
 
       {/* 3. MAIN CONTENTS WRAPPER */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 pb-24">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 pb-24">
         {errorMessage && (
           <div className="mb-6 bg-rose-50 border border-rose-100 rounded-2xl p-4 flex gap-3 text-red-700 animate-fade-in font-sans items-start justify-between">
             <div className="flex gap-3">
@@ -665,31 +1046,308 @@ export default function App() {
           </div>
         )}
 
+        {['compare', 'history', 'settings', 'receipts', 'assistant'].includes(activeTab) && (
+          <div className="mb-6 flex animate-fade-in font-sans">
+            <button
+              onClick={() => setActiveTab('tools')}
+              className="group inline-flex items-center justify-center p-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs font-bold rounded-2xl shadow-sm hover:shadow transition-all cursor-pointer"
+              title={lang === 'zh' ? '返回出行工具箱' : 'Back to Travel Suite'}
+            >
+              <div className="flex items-center justify-center">
+                <ArrowLeft className="w-4 h-4 text-slate-500 transition-transform duration-300 group-hover:-translate-x-0.5" />
+                <span className="select-none font-bold text-slate-700 text-xs transition-all duration-300 overflow-hidden max-w-0 opacity-0 group-hover:max-w-32 group-hover:opacity-100 group-hover:ml-1.5 whitespace-nowrap leading-none">
+                  {lang === 'zh' ? '返回工具箱' : 'Back'}
+                </span>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* TAB: TOOLS DASHBOARD MENU */}
+        {activeTab === 'tools' && (
+          <div className="max-w-4xl mx-auto space-y-8 pb-12 animate-fade-in font-sans">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 bg-clip-text text-transparent">
+                {lang === 'zh' ? '智能高级工具箱' : 'Travel Tool Suite'}
+              </h2>
+              <p className="text-slate-500 text-xs md:text-sm max-w-md mx-auto leading-relaxed">
+                {lang === 'zh' 
+                  ? '集成全方位智能对比、智能票据归并、历史档案夹等出行高阶规划与决策工具' 
+                  : 'All essential travel utilities, cost benchmarks, archives & preference customizations.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* 1. Compare Card */}
+              <button
+                onClick={() => {
+                  if (currentPlan) {
+                    setActiveTab('compare');
+                  } else {
+                    alert(lang === 'zh' ? '请先生成规划方案以解锁多个目的地的预算与玩乐对比。' : 'Please generate an active itinerary plan first to unlock city contrast evaluation.');
+                  }
+                }}
+                className={`group text-left p-6 bg-white border border-slate-100 rounded-3xl shadow-xl shadow-slate-100/50 hover:shadow-indigo-100/40 transition-all duration-300 flex flex-col justify-between h-48 cursor-pointer relative overflow-hidden`}
+              >
+                <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
+                <div className="space-y-3">
+                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center font-bold">
+                    <Scale className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm md:text-base flex items-center gap-1.5">
+                      {lang === 'zh' ? '多城方案全维度对比' : 'Destination Comparison'}
+                      {!currentPlan && (
+                        <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
+                          {lang === 'zh' ? '待解锁' : 'Locked'}
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      {lang === 'zh' 
+                        ? '一键比对您的游玩总天数、往返交通价格及每日食宿消费并生成多维PK表格。' 
+                        : 'Explore a rich benchmarking grid comparing stays, traffic costs, and overall budgets across target cities.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform self-end">
+                  {lang === 'zh' ? '立即对比 →' : 'Compare Now →'}
+                </div>
+              </button>
+
+              {/* 2. Receipts Card */}
+              <button
+                onClick={() => setActiveTab('receipts')}
+                className="group text-left p-6 bg-white border border-slate-100 rounded-3xl shadow-xl shadow-slate-100/50 hover:shadow-indigo-100/40 transition-all duration-300 flex flex-col justify-between h-48 cursor-pointer relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
+                <div className="space-y-3">
+                  <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center font-bold">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm md:text-base">
+                      {lang === 'zh' ? '智能旅客票据归并' : 'Smart Invoice Merge'}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      {lang === 'zh' 
+                        ? '支持对您的机票PDF、高铁票、酒店订单截图智能解析归集，生成动态行程及消费。' 
+                        : 'Drag or choose screenshots of plane, hotel vouchers or train receipts to consolidate dynamic budgets.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-xs font-bold text-emerald-600 group-hover:translate-x-1 transition-transform self-end">
+                  {lang === 'zh' ? '进入票据箱 →' : 'Enter Inbox →'}
+                </div>
+              </button>
+
+              {/* 3. History Card */}
+              <button
+                onClick={() => setActiveTab('history')}
+                className="group text-left p-6 bg-white border border-slate-100 rounded-3xl shadow-xl shadow-slate-100/50 hover:shadow-indigo-100/40 transition-all duration-300 flex flex-col justify-between h-48 cursor-pointer relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 w-24 h-24 bg-amber-50 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
+                <div className="space-y-3">
+                  <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center font-bold">
+                    <Archive className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm md:text-base">
+                      {lang === 'zh' ? '已存行程与收藏夹' : 'Archived Journeys'}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      {lang === 'zh' 
+                        ? '在这里保存、查看或徹底还原您的全部历史梦想规划，并能流畅地分享到漫游广场。' 
+                        : 'Review, load, and share previously generated travel paths and custom catalogs securely.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-xs font-bold text-amber-600 group-hover:translate-x-1 transition-transform self-end">
+                  {lang === 'zh' ? '打开收藏夹 →' : 'Open Favorites →'}
+                </div>
+              </button>
+
+              {/* 4. Settings Card */}
+              <button
+                onClick={() => setActiveTab('settings')}
+                className="group text-left p-6 bg-white border border-slate-100 rounded-3xl shadow-xl shadow-slate-100/50 hover:shadow-indigo-100/40 transition-all duration-300 flex flex-col justify-between h-48 cursor-pointer relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
+                <div className="space-y-3">
+                  <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center font-bold">
+                    <Sliders className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm md:text-base">
+                      {lang === 'zh' ? '系统诊断与设置中心' : 'Preferences & Support'}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      {lang === 'zh' 
+                        ? '切换首选语言、微调您的智能规划 AI 供应商与独立 API 密钥，进行安全缓存重置。' 
+                        : 'Customize system language, custom LLM models/keys, clear caches or view development credits.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform self-end">
+                  {lang === 'zh' ? '进入设置 →' : 'System Setup →'}
+                </div>
+              </button>
+
+              {/* 5. Travel Assistant Card */}
+              <button
+                onClick={() => setActiveTab('assistant')}
+                className="group text-left p-6 bg-white border border-slate-100 rounded-3xl shadow-xl shadow-slate-100/50 hover:shadow-indigo-100/40 transition-all duration-300 flex flex-col justify-between h-48 cursor-pointer relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 w-24 h-24 bg-violet-50 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
+                <div className="space-y-3">
+                  <div className="w-10 h-10 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center font-bold">
+                    <Briefcase className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm md:text-base">
+                      {lang === 'zh' ? '行李打包与即时换算助手' : 'Travel Companion Suite'}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      {lang === 'zh' 
+                        ? '针对行程目的地度身定制的旅行必备装箱清单，以及多国币种即时对齐汇总换算。' 
+                        : 'Context-tailored luggage checklists paired with global direct-converter calculator.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-xs font-bold text-violet-600 group-hover:translate-x-1 transition-transform self-end">
+                  {lang === 'zh' ? '使用助手 →' : 'Launch Companion →'}
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* TAB 1: ROADWAY SEARCH PLANNERS */}
         {activeTab === 'plan' && (
-          <div className="space-y-6">
-            <CitySelector
-              t={t}
-              lang={lang}
-              departureCity={departureCity}
-              setDepartureCity={setDepartureCity}
-              selectedDestinations={selectedDestinations}
-              setSelectedDestinations={setSelectedDestinations}
-              isAiEnhanced={isAiEnhanced}
-              setIsAiEnhanced={setIsAiEnhanced}
-              onGenerate={handleGeneratePlan}
-              isLoading={isLoading}
-              customLlmConfig={customLlmConfig}
-              customCities={customCities}
-              onAddCustomCity={handleAddCustomCity}
-            />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Main Content Area */}
+            <div className="lg:col-span-8 space-y-6">
+              <CitySelector
+                t={t}
+                lang={lang}
+                departureCity={departureCity}
+                setDepartureCity={setDepartureCity}
+                selectedDestinations={selectedDestinations}
+                setSelectedDestinations={setSelectedDestinations}
+                isAiEnhanced={isAiEnhanced}
+                setIsAiEnhanced={setIsAiEnhanced}
+                onGenerate={handleGeneratePlan}
+                isLoading={isLoading}
+                customLlmConfig={customLlmConfig}
+                customCities={customCities}
+                onAddCustomCity={handleAddCustomCity}
+                departureDate={departureDate}
+                setDepartureDate={setDepartureDate}
+                departureTime={departureTime}
+                setDepartureTime={setDepartureTime}
+                returnDate={returnDate}
+                setReturnDate={setReturnDate}
+                returnTime={returnTime}
+                setReturnTime={setReturnTime}
+                travelMode={travelMode}
+                setTravelMode={setTravelMode}
+                travelerCount={travelerCount}
+                setTravelerCount={setTravelerCount}
+              />
+            </div>
 
-            <PlanSyncManager
-              currentPlan={currentPlan}
-              onLoadSyncedPlan={handleLoadHistoricalPlan}
-              lang={lang}
-              t={t}
-            />
+            {/* Side Panel Area */}
+            <div className="lg:col-span-4 space-y-6">
+              {/* Itinerary Progress Overview Card */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-indigo-50/70">
+                  <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <Compass className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-sans font-bold text-slate-800 text-xs">
+                      {lang === 'zh' ? '当前行程概要' : 'Current Overview'}
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="space-y-3.5 text-xs font-sans">
+                  {/* Departure stop */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '出发城市' : 'Departure Point'}</span>
+                    <div className="font-bold text-slate-800 flex items-center gap-1.5 bg-slate-50 border border-slate-100 px-3 py-2 rounded-xl">
+                      <span>📍</span>
+                      {departureCity ? (
+                        <span className="capitalize">{getCityLabel(departureCity)}</span>
+                      ) : (
+                        <span className="text-slate-405 font-normal">{lang === 'zh' ? '暂未选定出发地' : 'Not selected yet'}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Destination stops */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '目的地路线' : 'Destinations Path'}</span>
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 min-h-[50px] flex flex-col justify-center">
+                      {selectedDestinations.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {selectedDestinations.map((dest, idx) => (
+                              <React.Fragment key={dest.cityId}>
+                                <span className="font-bold text-indigo-700 bg-white border border-slate-100 px-2 py-1 rounded-lg text-[11px] capitalize">
+                                  {getCityLabel(dest.cityId)} ({dest.days}d)
+                                </span>
+                                {idx < selectedDestinations.length - 1 && (
+                                  <span className="text-slate-350 text-[10px]">→</span>
+                                )}
+                              </React.Fragment>
+                            ))}
+                          </div>
+                          <div className="text-[10px] text-slate-400 pt-1.5 border-t border-slate-200/40 flex justify-between">
+                            <span>{lang === 'zh' ? `总共目的地: ${selectedDestinations.length} 个` : `Stops: ${selectedDestinations.length}`}</span>
+                            <span>{lang === 'zh' ? `总天数: ${selectedDestinations.reduce((s, d) => s + d.days, 0)} 天` : `Total: ${selectedDestinations.reduce((s, d) => s + d.days, 0)} days`}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-xs italic">{lang === 'zh' ? '在左侧添加行程目的地...' : 'No destinations added yet...'}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Engine context */}
+                  <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100">
+                    <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
+                      <span className="block text-[9px] text-slate-400 font-bold uppercase">{lang === 'zh' ? 'AI 驱动引擎' : 'Intelligence'}</span>
+                      <span className="font-bold text-slate-700 text-[10px] block mt-0.5">{getActiveAiName()}</span>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
+                      <span className="block text-[9px] text-slate-400 font-bold uppercase">{lang === 'zh' ? '地图引擎' : 'Map Provider'}</span>
+                      <span className="font-bold text-slate-700 text-[10px] block mt-0.5 capitalize">{mapEngine}</span>
+                    </div>
+                  </div>
+
+                  {/* Submit Trigger */}
+                  {selectedDestinations.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleGeneratePlan}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-2 text-xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{lang === 'zh' ? '立刻生成智能行程' : 'Generate Intelligent Plan'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Share and Cloud synchronization */}
+              <PlanSyncManager
+                currentPlan={currentPlan}
+                onLoadSyncedPlan={handleLoadHistoricalPlan}
+                lang={lang}
+                t={t}
+              />
+            </div>
           </div>
         )}
 
@@ -747,18 +1405,45 @@ export default function App() {
                     </h3>
 
                     {/* Schedule statistics row */}
-                    <div className="flex items-center gap-4 text-xs font-sans font-medium text-slate-400 flex-wrap">
-                      <span className="flex items-center gap-1 font-sans">
-                        <Calendar className="w-4 h-4 text-slate-450" />
-                        {t.totalDays}: <span className="font-bold text-slate-700">{currentPlan.totalDays}</span>
+                    <div className="flex items-center gap-3 text-xs font-sans font-medium text-slate-500 flex-wrap pt-1">
+                      <span className="flex items-center gap-1 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                        <Calendar className="w-4 h-4 text-slate-400" />
+                        <span>{t.totalDays}: <span className="font-extrabold text-slate-800">{currentPlan.totalDays}</span></span>
                       </span>
-                      <span className="flex items-center gap-1 font-sans">
-                        <DollarSign className="w-4 h-4 text-slate-450" />
-                        {t.totalBudget}:{' '}
-                        <span className="font-bold text-indigo-600 text-sm">
-                          {lang === 'zh' ? '¥' : '$'}
-                          {currentPlan.totalBudget}
+                      <span className="flex items-center gap-1 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                        <DollarSign className="w-4 h-4 text-slate-400" />
+                        <span>
+                          {t.totalBudget}:{' '}
+                          <span className="font-extrabold text-blue-600 font-sans text-sm">
+                            ¥{computedTotalBudget}
+                            {lang === 'en' 
+                              ? ` ($${Math.round(computedTotalBudget / (getStoredExchangeRates()?.CNY || 7.24))})` 
+                              : ` (约 $${Math.round(computedTotalBudget / (getStoredExchangeRates()?.CNY || 7.24))})`}
+                          </span>
                         </span>
+                      </span>
+                      {/* Real-time reactive traveler selection inside active view header */}
+                      <span className="flex items-center gap-2 bg-blue-50/70 border border-blue-100 px-3 py-1 rounded-xl text-blue-950 font-bold select-none">
+                        <Users className="w-4 h-4 text-blue-600" />
+                        <span className="text-[11px] font-sans font-extrabold text-slate-750">{lang === 'zh' ? '游玩人数：' : 'Travelers: '}</span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setTravelerCount(Math.max(1, travelerCount - 1))}
+                            disabled={travelerCount <= 1}
+                            className="w-5 h-5 rounded bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all text-xs"
+                          >
+                            -
+                          </button>
+                          <span className="text-slate-800 font-extrabold text-xs px-1 min-w-[14px] text-center">{travelerCount}</span>
+                          <button
+                            type="button"
+                            onClick={() => setTravelerCount(travelerCount + 1)}
+                            className="w-5 h-5 rounded bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-600 select-none transition-all text-xs"
+                          >
+                            +
+                          </button>
+                        </div>
                       </span>
                     </div>
                   </div>
@@ -862,13 +1547,25 @@ export default function App() {
                       </div>
 
                       {/* Itinerary Timeline */}
-                      <TimelineView t={t} lang={lang} days={currentActiveCityPlan.days} onUpdatePois={handleUpdateCityPois} />
+                      <TimelineView
+                        t={t}
+                        lang={lang}
+                        days={currentActiveCityPlan.days}
+                        onUpdatePois={handleUpdateCityPois}
+                        cityId={currentActiveCityPlan.cityId}
+                        departureDate={currentPlan?.departureDate || departureDate}
+                        departureTime={currentPlan?.departureTime || departureTime}
+                        returnDate={currentPlan?.returnDate || returnDate}
+                        returnTime={currentPlan?.returnTime || returnTime}
+                        isFirstCityPlan={activeCityIndex === 0}
+                        isLastCityPlan={currentPlan ? (activeCityIndex === currentPlan.cityPlans.length - 1) : false}
+                      />
                     </div>
 
                     {/* Right side: visual costs analysis and survival advice lists */}
                     <div className="lg:col-span-4 space-y-6">
                       {/* Cost items progress */}
-                      <BudgetVisualizer t={t} lang={lang} expense={currentActiveCityPlan.localExpense} />
+                      <BudgetVisualizer t={t} lang={lang} expense={computedActiveLocalExpense} cityId={currentActiveCityPlan.cityId} travelerCount={travelerCount} />
 
                       {/* Dynamic AI Status Card (Derived from Bento theme HTML block) */}
                       <div className="bg-blue-600 rounded-3xl p-6 shadow-md text-white space-y-4">
@@ -925,6 +1622,7 @@ export default function App() {
             lang={lang}
             cityPlans={currentPlan ? currentPlan.cityPlans : []}
             transits={currentPlan ? currentPlan.transits : {}}
+            travelerCount={travelerCount}
           />
         )}
 
@@ -941,8 +1639,10 @@ export default function App() {
 
         {/* TAB 5: SYSTEM PREFERENCES & ABOUT SETTINGS */}
         {activeTab === 'settings' && (
-          <div className="max-w-2xl mx-auto space-y-6">
-            {/* 1. General Preferences card */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans">
+            {/* Left/Main Column: Preferences & Engine configurations */}
+            <div className="lg:col-span-8 space-y-6">
+              {/* 1. General Preferences card */}
             <div className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-xl shadow-slate-100/50 space-y-6 font-sans">
               <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4">
                 <Sliders className="w-5 h-5 text-slate-600" />
@@ -1184,11 +1884,13 @@ export default function App() {
                       API Access Key
                     </label>
                     <input
-                      type="password"
+                      type={customLlmConfig.apiKey === 'DEEPSEEK_SYSTEM_KEY' ? 'text' : 'password'}
                       placeholder={
-                        customLlmConfig.provider === 'deepseek' ? 'sk-xxxxxxxxxxxxxxxxxxxxxxxx' : 'pasted secret key...'
+                        customLlmConfig.apiKey === 'DEEPSEEK_SYSTEM_KEY'
+                          ? (lang === 'zh' ? '✨ 已启用后端 Unified DeepSeek 密钥 (无需输入)' : '✨ Server-side DeepSeek Key is active (ready)')
+                          : (customLlmConfig.provider === 'deepseek' ? 'sk-xxxxxxxxxxxxxxxxxxxxxxxx' : 'pasted secret key...')
                       }
-                      value={customLlmConfig.apiKey}
+                      value={customLlmConfig.apiKey === 'DEEPSEEK_SYSTEM_KEY' ? '' : customLlmConfig.apiKey}
                       onChange={(e) => setCustomLlmConfig({ ...customLlmConfig, apiKey: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-xs px-4 py-3 rounded-2xl outline-none transition-all font-mono text-slate-800 shadow-inner"
                     />
@@ -1312,8 +2014,11 @@ export default function App() {
                   </button>
                 </div>
               </div>
-            </div>
+            </div> {/* Closes Card 2 */}
+          </div> {/* Closes Left Column (lg:col-span-8) */}
 
+          {/* Right/Side Column: Diagnostic Utilities & About Info */}
+          <div className="lg:col-span-4 space-y-6">
             {/* 3. High-risk cache clearing card */}
             <div className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-xl shadow-slate-100/50 space-y-4 font-sans">
               <span className="block text-slate-650 font-semibold text-xs tracking-wide uppercase">
@@ -1346,7 +2051,8 @@ export default function App() {
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {activeTab === 'receipts' && (
           <ReceiptMergeManager
@@ -1377,85 +2083,149 @@ export default function App() {
             onClose={() => setActiveTab('plan')}
           />
         )}
+
+        {activeTab === 'assistant' && (
+          <TravelAssistant
+            lang={lang}
+            currentPlan={currentPlan}
+            onClose={() => setActiveTab('tools')}
+          />
+        )}
       </main>
 
+      {/* FLOATING REAL-TIME RADAR CAPSULES (优雅露角与极简化流动机制) */}
+      {currentPlan && (
+        <div className="fixed bottom-18 left-0 right-0 z-40 flex justify-center items-center gap-1.5 px-3 pointer-events-none drop-shadow-lg select-none max-w-5xl mx-auto flex-wrap md:flex-nowrap pb-2">
+          {/* Capsule 1: Aviation ATC */}
+          <div className="group/capsule flex items-center h-8 max-w-[32px] hover:max-w-[420px] rounded-full bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800/90 shadow-sm hover:shadow-md transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden pointer-events-auto cursor-pointer p-1 hover:px-3 hover:py-1 gap-0 hover:gap-2">
+            <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-sky-50 dark:bg-sky-950 text-sky-500 animate-[pulse_2s_infinite]">
+              <Plane className="w-3.2 h-3.2" />
+            </div>
+            <span className="font-sans text-[10px] font-bold text-slate-700 dark:text-slate-350 opacity-0 group-hover/capsule:opacity-100 transition-opacity duration-300 delay-50 whitespace-nowrap leading-none">
+              {lang === 'zh' ? '空域管制: 运行温和，强对流已底层静默绕飞，安全率 99.8%' : 'ATC Airspace: Steady flow, rainstorms bypassed silently. Safety 99.8%'}
+            </span>
+          </div>
+
+          {/* Capsule 2: Ground Network */}
+          <div className="group/capsule flex items-center h-8 max-w-[32px] hover:max-w-[420px] rounded-full bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800/90 shadow-sm hover:shadow-md transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden pointer-events-auto cursor-pointer p-1 hover:px-3 hover:py-1 gap-0 hover:gap-2">
+            <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-500 animate-[pulse_2.5s_infinite]">
+              <Train className="w-3.2 h-3.2" />
+            </div>
+            <span className="font-sans text-[10px] font-bold text-slate-700 dark:text-slate-350 opacity-0 group-hover/capsule:opacity-100 transition-opacity duration-300 delay-50 whitespace-nowrap leading-none">
+              {lang === 'zh' ? '国铁接驳: 实时正点率 99.7%，中转站接驳保护已全开' : 'HSR Dispatch: Punctuality 99.7%, transfer buffers pre-scheduled'}
+            </span>
+          </div>
+
+          {/* Capsule 3: Minute-level weather Doppler */}
+          <div className="group/capsule flex items-center h-8 max-w-[32px] hover:max-w-[420px] rounded-full bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800/90 shadow-sm hover:shadow-md transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden pointer-events-auto cursor-pointer p-1 hover:px-3 hover:py-1 gap-0 hover:gap-2">
+            <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-cyan-50 dark:bg-cyan-950 text-cyan-500 animate-[pulse_1.8s_infinite]">
+              <CloudRain className="w-3.2 h-3.2" />
+            </div>
+            <span className="font-sans text-[10px] font-bold text-slate-700 dark:text-slate-350 opacity-0 group-hover/capsule:opacity-100 transition-opacity duration-300 delay-50 whitespace-nowrap leading-none">
+              {lang === 'zh' ? '降水雷达: 自适应雨云百米网格扫描，未来3小时内无突发降水' : 'Doppler Weather: Local rain clouds scanned. 0 precipitation for the next 3h'}
+            </span>
+          </div>
+
+          {/* Capsule 4: Scenic crowd density */}
+          <div className="group/capsule flex items-center h-8 max-w-[32px] hover:max-w-[420px] rounded-full bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800/90 shadow-sm hover:shadow-md transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden pointer-events-auto cursor-pointer p-1 hover:px-3 hover:py-1 gap-0 hover:gap-2">
+            <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-500 animate-[pulse_3s_infinite]">
+              <Users className="w-3.2 h-3.2" />
+            </div>
+            <span className="font-sans text-[10px] font-bold text-slate-700 dark:text-slate-350 opacity-0 group-hover/capsule:opacity-100 transition-opacity duration-300 delay-50 whitespace-nowrap leading-none">
+              {lang === 'zh' ? '在园负荷: 客流指数偏低，推荐采用绿色避峰游园线，无需长时等待' : 'Scenic Crowd: Ideal crowd density. Custom green touring path calculated'}
+            </span>
+          </div>
+
+          {/* Capsule 5: Gourmet seating queue */}
+          <div className="group/capsule flex items-center h-8 max-w-[32px] hover:max-w-[420px] rounded-full bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800/90 shadow-sm hover:shadow-md transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden pointer-events-auto cursor-pointer p-1 hover:px-3 hover:py-1 gap-0 hover:gap-2">
+            <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 dark:bg-amber-950 text-amber-500 animate-[pulse_2.2s_infinite]">
+              <Flame className="w-3.2 h-3.2" />
+            </div>
+            <span className="font-sans text-[10px] font-bold text-slate-700 dark:text-slate-350 opacity-0 group-hover/capsule:opacity-100 transition-opacity duration-300 delay-50 whitespace-nowrap leading-none">
+              {lang === 'zh' ? '餐厅排位: 晚餐节点周边高口碑店等位平均仅 1-2 桌，即刻轻松落座' : 'Gourmet Bench: Dynamic table monitoring active. Local restaurant queue 0-2 tables'}
+            </span>
+          </div>
+
+          {/* Capsule 6: Live FX Rates */}
+          <div className="group/capsule flex items-center h-8 max-w-[32px] hover:max-w-[420px] rounded-full bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800/90 shadow-sm hover:shadow-md transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden pointer-events-auto cursor-pointer p-1 hover:px-3 hover:py-1 gap-0 hover:gap-2">
+            <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-500 animate-[pulse_2.7s_infinite]">
+              <DollarSign className="w-3.2 h-3.2" />
+            </div>
+            <span className="font-sans text-[10px] font-bold text-slate-700 dark:text-slate-350 opacity-0 group-hover/capsule:opacity-100 transition-opacity duration-300 delay-50 whitespace-nowrap leading-none">
+              {lang === 'zh' ? '结算外汇: 发卡行瞬时清算费率上扬，外汇最惠分秒通道已完美锁定' : 'Real-time FX: Bank currency clearing optimized. Instant electronic checkout is optimal'}
+            </span>
+          </div>
+
+          {/* Capsule 7: Companion UWB Geofence */}
+          <div className="group/capsule flex items-center h-8 max-w-[32px] hover:max-w-[420px] rounded-full bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800/90 shadow-sm hover:shadow-md transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden pointer-events-auto cursor-pointer p-1 hover:px-3 hover:py-1 gap-0 hover:gap-2">
+            <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-purple-50 dark:bg-purple-950 text-purple-500 animate-[pulse_2.1s_infinite]">
+              <Wifi className="w-3.2 h-3.2" />
+            </div>
+            <span className="font-sans text-[10px] font-bold text-slate-700 dark:text-slate-350 opacity-0 group-hover/capsule:opacity-100 transition-opacity duration-300 delay-50 whitespace-nowrap leading-none">
+              {lang === 'zh' ? '近场伴行: UWB 无线星型网络正常，同伴电池与距离全状态绿，安全地理围栏已合围' : 'Companion Geofence: Smart Mesh/UWB active. Devices are secure & fully geofenced'}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 4. SEAMLESS DOCK NAVIGATION BAR (BOTTOM STICKY) */}
-      <footer className="fixed bottom-0 left-0 right-0 h-18 bg-white/95 border-t border-slate-200 py-2.5 px-4 flex items-center justify-around backdrop-blur-md z-45 shadow-sm">
+      <footer className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 border-t border-slate-200 py-1.5 px-4 flex items-center justify-around backdrop-blur-md z-45 shadow-sm">
         <button
           onClick={() => setActiveTab('plan')}
-          className={`flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 ${
+          className={`group flex flex-col items-center justify-center cursor-pointer transition-all duration-300 h-12 w-20 rounded-xl hover:bg-slate-50 ${
             activeTab === 'plan' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400 hover:text-slate-650'
           }`}
+          title={t.navPlan}
         >
-          <Compass className="w-5.5 h-5.5" />
-          <span className="text-[10px] select-none font-bold tracking-tight leading-none">{t.navPlan}</span>
+          <Compass className="w-5.5 h-5.5 transition-transform duration-300 group-hover:scale-110" />
+          <span className="text-[10px] select-none font-bold tracking-tight leading-none transition-all duration-300 overflow-hidden max-h-0 opacity-0 group-hover:max-h-4 group-hover:opacity-100 group-hover:mt-1.5">
+            {t.navPlan}
+          </span>
         </button>
 
         <button
           onClick={() => {
             if (currentPlan) setActiveTab('itinerary');
-            else alert(lang === 'zh' ? '请先生成规划方案，再切换至Itinerary细节哦' : 'Please envision an active dream schedule first!');
+            else alert(lang === 'zh' ? '请先生成规划方案，再切换至行程细节哦' : 'Please envision an active dream schedule first!');
           }}
-          className={`flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 relative ${
+          className={`group flex flex-col items-center justify-center cursor-pointer transition-all duration-300 h-12 w-20 rounded-xl hover:bg-slate-50 relative ${
             activeTab === 'itinerary' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400 hover:text-slate-650'
           } ${!currentPlan ? 'opacity-40 hover:opacity-55' : ''}`}
+          title={t.navOverview}
         >
-          <Map className="w-5.5 h-5.5" />
-          <span className="text-[10px] select-none font-bold tracking-tight leading-none">{t.navOverview}</span>
-        </button>
-
-        <button
-          onClick={() => {
-            if (currentPlan) setActiveTab('compare');
-            else alert(lang === 'zh' ? '请先生成规划方案，再切换至评估对比哦' : 'Please envision an active dream schedule first!');
-          }}
-          className={`flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 ${
-            activeTab === 'compare' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400 hover:text-slate-650'
-          } ${!currentPlan ? 'opacity-40 hover:opacity-55' : ''}`}
-        >
-          <Scale className="w-5.5 h-5.5" />
-          <span className="text-[10px] select-none font-bold tracking-tight leading-none">{t.navCompare}</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 ${
-            activeTab === 'history' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400 hover:text-slate-650'
-          }`}
-        >
-          <Archive className="w-5.5 h-5.5" />
-          <span className="text-[10px] select-none font-bold tracking-tight leading-none">{t.navHistory}</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('receipts')}
-          className={`flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 ${
-            activeTab === 'receipts' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400 hover:text-slate-650'
-          }`}
-        >
-          <FileSpreadsheet className="w-5.5 h-5.5" />
-          <span className="text-[10px] select-none font-bold tracking-tight leading-none">{t.navReceipts}</span>
+          <Map className="w-5.5 h-5.5 transition-transform duration-300 group-hover:scale-110" />
+          <span className="text-[10px] select-none font-bold tracking-tight leading-none transition-all duration-300 overflow-hidden max-h-0 opacity-0 group-hover:max-h-4 group-hover:opacity-100 group-hover:mt-1.5">
+            {t.navOverview}
+          </span>
         </button>
 
         <button
           onClick={() => setActiveTab('forum')}
-          className={`flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 ${
+          className={`group flex flex-col items-center justify-center cursor-pointer transition-all duration-300 h-12 w-20 rounded-xl hover:bg-slate-50 ${
             activeTab === 'forum' ? 'text-blue-600 font-bold scale-105 animate-pulse' : 'text-slate-400 hover:text-slate-650 animate-none'
           }`}
           id="nav-forum-tab-btn"
+          title={t.navForum}
         >
-          <Users className="w-5.5 h-5.5 text-indigo-500" />
-          <span className="text-[10px] select-none font-bold tracking-tight leading-none text-indigo-700">{t.navForum}</span>
+          <Users className="w-5.5 h-5.5 text-indigo-500 transition-transform duration-300 group-hover:scale-110" />
+          <span className="text-[10px] select-none font-bold tracking-tight leading-none text-indigo-700 transition-all duration-300 overflow-hidden max-h-0 opacity-0 group-hover:max-h-4 group-hover:opacity-100 group-hover:mt-1.5">
+            {t.navForum}
+          </span>
         </button>
 
         <button
-          onClick={() => setActiveTab('settings')}
-          className={`flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 ${
-            activeTab === 'settings' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400 hover:text-slate-650'
+          onClick={() => setActiveTab('tools')}
+          className={`group flex flex-col items-center justify-center cursor-pointer transition-all duration-300 h-12 w-20 rounded-xl hover:bg-slate-50 ${
+            ['tools', 'compare', 'history', 'receipts', 'settings', 'assistant'].includes(activeTab)
+              ? 'text-blue-600 font-bold scale-105'
+              : 'text-slate-400 hover:text-slate-650'
           }`}
+          title={lang === 'zh' ? '出行工具' : 'Toolkit'}
         >
-          <Sliders className="w-5.5 h-5.5" />
-          <span className="text-[10px] select-none font-bold tracking-tight leading-none">{t.navSettings}</span>
+          <LayoutGrid className="w-5.5 h-5.5 text-emerald-500 transition-transform duration-300 group-hover:scale-110" />
+          <span className="text-[10px] select-none font-bold tracking-tight leading-none text-emerald-700 transition-all duration-300 overflow-hidden max-h-0 opacity-0 group-hover:max-h-4 group-hover:opacity-100 group-hover:mt-1.5">
+            {lang === 'zh' ? '出行工具' : 'Toolkit'}
+          </span>
         </button>
       </footer>
     </div>

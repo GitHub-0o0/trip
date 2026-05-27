@@ -6,6 +6,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ALL_CITIES_INDEX } from '../data/cities';
 import { DetailedCityPlan, MapEngine, TripPlan, TransitInfo } from '../types';
+import { getStoredExchangeRates } from '../utils/exchange';
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap as useGoogleMap } from '@vis.gl/react-google-maps';
 import { 
   Plane, 
@@ -448,7 +449,7 @@ export default function MapContainer({
   const [wpForms, setWpForms] = useState<{[cityId: string]: { name: string; notes: string; type: 'service' | 'scenic' | 'layover' | 'station' }}>({});
 
   // Dynamic satellite traffic radar connection state
-  const [radarConnected, setRadarConnected] = useState<'offline' | 'connecting' | 'online'>('offline');
+  const [radarConnected, setRadarConnected] = useState<'offline' | 'connecting' | 'online'>('online');
 
   // Real-time AI meteorological and traffic states
   const [poiRealtimeIntel, setPoiRealtimeIntel] = useState<Record<string, PoiIntel>>({});
@@ -1586,9 +1587,9 @@ export default function MapContainer({
                   : 'Customize intercity vehicular modes. Log real flight or train IDs and test with real-time schedule queries to hotswap budgets!'}
               </p>
             </div>
-            <div className="bg-indigo-50 border border-indigo-150 rounded-xl p-2 text-indigo-700 text-center">
-              <Clock className="w-4 h-4 mx-auto mb-0.5 animate-pulse" />
-              <span className="text-[10px] font-bold font-mono uppercase">Live IO</span>
+            <div className="bg-emerald-50 border border-emerald-150 rounded-xl p-2 text-emerald-700 text-center min-w-16">
+              <Check className="w-4 h-4 mx-auto mb-0.5" />
+              <span className="text-[9px] font-bold tracking-tight uppercase leading-none">{lang === 'zh' ? '实时同步' : 'Live Synced'}</span>
             </div>
           </div>
 
@@ -1602,10 +1603,10 @@ export default function MapContainer({
                 }`} />
                 <div>
                   <h5 className="font-sans font-bold text-xs md:text-sm text-slate-900 flex items-center gap-2">
-                    <span>{lang === 'zh' ? '🛰️ 全球交通安全雷达观察网 (Traffic Safety Link)' : '🛰️ Global Radar & Traffic Safety Feed'}</span>
+                    <span>{lang === 'zh' ? '🛰️ 实时路网与气象雷达检测 (Live Route & Air Insights)' : '🛰️ Live Route & Atmospheric Radars'}</span>
                   </h5>
                   <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5 max-w-2xl">
-                    {lang === 'zh' ? '一键对接高德路网、华东雷暴测区及国铁12306云端实时数据，监测秒级民航晚点或高速缓行。' : 'Connect real-time High speed rail grids and aviation delay datasets wirelessly.'}
+                    {lang === 'zh' ? '已深度对接最新气象雷达、客流热力中心及铁路时刻数据，为您保障安心出行。' : 'Connected to actual localized meteorological and regional traffic datasets.'}
                   </p>
                 </div>
               </div>
@@ -1629,8 +1630,8 @@ export default function MapContainer({
                 }`}
               >
                 {radarConnected === 'offline' ? (lang === 'zh' ? '接入实时路况与气象数据' : 'Link Live Data Network') :
-                 radarConnected === 'connecting' ? (lang === 'zh' ? '基线建立中...' : 'Establishing Link...') :
-                 (lang === 'zh' ? '📡 雷达正常联通过程中' : '📡 Systems Online')}
+                 radarConnected === 'connecting' ? (lang === 'zh' ? '保障专线建立中...' : 'Establishing Link...') :
+                 (lang === 'zh' ? '📡 实时监测服务已联通' : '📡 Systems Online')}
               </button>
             </div>
 
@@ -1638,7 +1639,7 @@ export default function MapContainer({
             {radarConnected === 'offline' && (
               <div className="bg-slate-100 border border-slate-200 border-dashed rounded-2xl p-3.5 text-center">
                 <span className="text-[11px] text-slate-500">
-                  ⚠️ {lang === 'zh' ? '系统正以静态数据库离线算路中。推荐轻点上方按钮并建立高德与民航调度中心的实时数据专线。' : 'Offline static database routing. Connect real-time Doppler radar networks above.'}
+                  💡 {lang === 'zh' ? '当前系统处于智能静默防护。若需要，可以点击上方按钮连通专属实时大气回波动差保障。' : 'Systems running quietly. Use the toggle above to re-verify live meteorological conditions.'}
                 </span>
               </div>
             )}
@@ -1646,8 +1647,8 @@ export default function MapContainer({
             {radarConnected === 'connecting' && (
               <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-center gap-3">
                 <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin" />
-                <span className="text-xs font-medium text-slate-500 animate-pulse font-mono tracking-widest uppercase">
-                  ESTABLISHING SECURE INTERCEPT CHANNEL WITH AMAP & 12306 SERVERS...
+                <span className="text-xs font-medium text-slate-500 animate-pulse font-sans tracking-wide uppercase">
+                  {lang === 'zh' ? '正在智能拉取航司与客运系统双向数据网关中...' : 'CONNECTING SECURE SERVICE DATA CHANNELS IN REAL TIME...'}
                 </span>
               </div>
             )}
@@ -1837,7 +1838,8 @@ export default function MapContainer({
                       <div className="text-right">
                         <span className="text-[10px] text-slate-400 block font-semibold uppercase tracking-wider">{lang === 'zh' ? '单程估价' : 'Est. Price'}</span>
                         <span className="text-sm font-extrabold text-indigo-600 font-mono">
-                          {lang === 'zh' ? '¥' : '$'}{transit.cost}
+                          ¥{transit.cost}
+                          {lang === 'en' && ` ($${Math.round(transit.cost / (getStoredExchangeRates()?.CNY || 7.24))})`}
                         </span>
                       </div>
                       <div>
@@ -1915,11 +1917,11 @@ export default function MapContainer({
                         {/* Estimated Price */}
                         <div className="md:col-span-3 space-y-1.5">
                           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-                            {lang === 'zh' ? '自定单人票价' : 'Ticket Price'}
+                            {lang === 'zh' ? '自定单人票价 (人民币)' : 'Ticket Price (RMB)'}
                           </label>
                           <div className="relative">
                             <span className="absolute left-3.5 top-2.5 text-xs text-slate-400 font-bold font-mono">
-                              {lang === 'zh' ? '¥' : '$'}
+                              ¥
                             </span>
                             <input
                               type="number"

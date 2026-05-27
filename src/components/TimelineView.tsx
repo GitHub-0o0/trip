@@ -7,17 +7,58 @@ import React, { useState } from 'react';
 import { DayPlan, POI } from '../types';
 import { TranslationDict } from '../data/i18n';
 import { Clock, DollarSign, Compass, Utensils, Home, Car, ChevronDown, ChevronUp, AlertCircle, Sparkles, Plus, Trash2, MapPin } from 'lucide-react';
+import { formatCostDual } from '../utils/exchange';
 
 interface TimelineViewProps {
   t: TranslationDict;
   lang: 'zh' | 'en';
   days: DayPlan[];
   onUpdatePois?: (day: number, updatedPois: POI[]) => void;
+  cityId?: string;
+  departureDate?: string;
+  departureTime?: string;
+  returnDate?: string;
+  returnTime?: string;
+  isFirstCityPlan?: boolean;
+  isLastCityPlan?: boolean;
 }
 
-export default function TimelineView({ t, lang, days, onUpdatePois }: TimelineViewProps) {
+export default function TimelineView({
+  t,
+  lang,
+  days,
+  onUpdatePois,
+  cityId = 'beijing',
+  departureDate,
+  departureTime = '09:00',
+  returnDate,
+  returnTime = '18:00',
+  isFirstCityPlan = false,
+  isLastCityPlan = false,
+}: TimelineViewProps) {
   const [activeDay, setActiveDay] = useState(1);
   const [expandedPois, setExpandedPois] = useState<{ [poiId: string]: boolean }>({});
+
+  const getDayDateLabel = (dayNum: number) => {
+    if (!departureDate) return '';
+    const startBase = new Date(departureDate);
+    if (isNaN(startBase.getTime())) return '';
+    
+    // Add (dayNum - 1) days to the departure date
+    const d = new Date(startBase);
+    d.setDate(startBase.getDate() + (dayNum - 1));
+    
+    const m = d.getMonth() + 1;
+    const dateNum = d.getDate();
+    const dayOfWeek = d.getDay();
+    const weekdayName = lang === 'zh'
+      ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][dayOfWeek]
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek];
+      
+    return lang === 'zh'
+      ? `${m}月${dateNum}日`
+      : `${m}/${dateNum}`;
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedPois((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -304,13 +345,22 @@ export default function TimelineView({ t, lang, days, onUpdatePois }: TimelineVi
             <button
               key={d.day}
               onClick={() => setActiveDay(d.day)}
-              className={`px-4.5 py-2.5 rounded-xl text-xs font-bold font-sans tracking-wide shrink-0 transition-all cursor-pointer border ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold font-sans tracking-wide shrink-0 transition-all cursor-pointer border ${
                 activeDay === d.day
                   ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
                   : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-100/80 hover:text-slate-800'
               }`}
             >
-              {t.tabDay.replace('{n}', d.day.toString())}
+              <div className="flex flex-col items-center justify-center">
+                <span>{t.tabDay.replace('{n}', d.day.toString())}</span>
+                {departureDate && (
+                  <span className={`text-[9px] mt-0.5 opacity-80 font-mono font-bold ${
+                    activeDay === d.day ? 'text-indigo-200' : 'text-slate-400'
+                  }`}>
+                    {getDayDateLabel(d.day)}
+                  </span>
+                )}
+              </div>
             </button>
           ))}
         </div>
@@ -339,6 +389,47 @@ export default function TimelineView({ t, lang, days, onUpdatePois }: TimelineVi
           )}
         </div>
       </div>
+
+      {/* Dynamic Departure & Return Time Alignment HUD Banners */}
+      {activeDay === 1 && isFirstCityPlan && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-4 flex items-start gap-3 shadow-3xs">
+          <div className="p-2 bg-blue-600 text-white rounded-xl shrink-0">
+            <Compass className="w-5 h-5 animate-spin-slow" />
+          </div>
+          <div>
+            <h5 className="text-xs font-bold font-sans text-blue-900 leading-snug">
+              {lang === 'zh' 
+                ? `📅 首日行程安全对接中 (大交通：${departureTime})` 
+                : `📅 Day 1 Schedule Aligned (Transit: ${departureTime})`}
+            </h5>
+            <p className="text-[11px] text-slate-500 leading-relaxed font-medium mt-1">
+              {lang === 'zh'
+                ? `💡 系统已完美匹配大交通。下午/抵达后活动在您于 ${departureTime} 前后抵达目的地后流畅接轨，上午时光留白供您从容值机/长途移动。`
+                : `💡 The itinerary has resolved departure schedules automatically. Morning hours are reserved for airport boarding and travel, while local POIs start fully after arrival around ${departureTime}.`}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {activeDay === days.length && isLastCityPlan && (
+        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-4 flex items-start gap-3 shadow-3xs">
+          <div className="p-2 bg-emerald-600 text-white rounded-xl shrink-0">
+            <Compass className="w-5 h-5 rotate-45" />
+          </div>
+          <div>
+            <h5 className="text-xs font-bold font-sans text-emerald-900 leading-snug">
+              {lang === 'zh' 
+                ? `📅 末日回程完美闭环 (大交通：${returnTime})` 
+                : `📅 Final Day Schedule Aligned (Transit: ${returnTime})`}
+            </h5>
+            <p className="text-[11px] text-slate-500 leading-relaxed font-medium mt-1">
+              {lang === 'zh'
+                ? `💡 返程大交通已智能锁定。今日最后打卡活动在中午前后准时收尾，充分为您预留了前往航站楼/火车站值机、防误机的黄金3小时。`
+                : `💡 Return closure resolved successfully. Local check-ins conclude before noon, saving a standard 3-hour window to catch your ${returnTime} connection safely.`}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Primary Timeline Tree visualizer */}
       <div className="relative pl-6 border-l border-slate-250 space-y-6 ml-3 py-1">
@@ -383,7 +474,7 @@ export default function TimelineView({ t, lang, days, onUpdatePois }: TimelineVi
                             <span className="font-bold text-slate-700">
                               {poi.cost === 0
                                 ? (lang === 'zh' ? '免费' : 'Free')
-                                : `${lang === 'zh' ? '¥' : '$'}${poi.cost}`}
+                                : formatCostDual(poi.cost, cityId, lang)}
                             </span>
                           </span>
                         </div>
@@ -556,11 +647,11 @@ export default function TimelineView({ t, lang, days, onUpdatePois }: TimelineVi
                 </div>
                 <div className="space-y-1">
                   <label className="block text-xs font-extrabold text-slate-600">
-                    {lang === 'zh' ? '花费预估 (等额本币)' : 'Expected Cost'}
+                    {lang === 'zh' ? '花费预估 (等额人民币)' : 'Expected Cost (RMB / ¥)'}
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-2 text-xs text-slate-400 font-bold">
-                      {lang === 'zh' ? '¥' : '$'}
+                      ¥
                     </span>
                     <input
                       type="number"

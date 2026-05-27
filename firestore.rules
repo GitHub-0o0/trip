@@ -1,12 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 1. Global Safety Net - Default Deny
+    // 1. Global Safety Net - Default Deny to enforce Zero-Trust access
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Validation helper functions
+    // Static Validation Helper Primitives
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -19,22 +19,61 @@ service cloud.firestore {
       return resource.data;
     }
 
+    // Validation helper for SyncPlan documents
+    function isValidSyncPlan(data) {
+      return data.keys().hasAll(['id', 'code', 'tripPlan', 'updatedAt', 'createdAt'])
+        && data.id is string && data.id.size() <= 128
+        && data.code is string && data.code.size() == 6
+        && data.tripPlan is map
+        && (!data.keys().contains('peers') || data.peers is map)
+        && (!data.keys().contains('notes') || data.notes is list)
+        && (!data.keys().contains('history') || data.history is list);
+    }
+
+    // Validation helper for ForumPost documents
+    function isValidForumPost(data) {
+      return data.keys().hasAll(['id', 'title', 'description', 'tags', 'author', 'upvotes', 'createdAt', 'tripPlan'])
+        && data.id is string && data.id.size() <= 128
+        && data.title is string && data.title.size() <= 200
+        && data.description is string && data.description.size() <= 2000
+        && data.tags is list && data.tags.size() <= 10
+        && data.author is string && data.author.size() <= 100
+        && data.upvotes is int
+        && data.tripPlan is map
+        && (!data.keys().contains('comments') || data.comments is list);
+    }
+
     // 2. Rules for Multi-device Sync Plans
     match /sync_plans/{planId} {
       allow get: if isValidId(planId);
       allow list: if false; // Block user bulk scraping queries
       
       allow create: if isValidId(planId)
-        && incoming(request).id is string
-        && incoming(request).code is string
-        && incoming(request).code.size() == 6
-        && incoming(request).tripPlan is map;
+        && isValidSyncPlan(incoming(request));
         
       allow update: if isValidId(planId)
         && incoming(request).code == existing(resource).code
-        && incoming(request).tripPlan is map;
+        && isValidSyncPlan(incoming(request));
         
       allow delete: if false; // Prevent client side accidental deletions
+    }
+
+    // 3. Rules for Travel Forum and Community Posts
+    match /forum_posts/{postId} {
+      allow get: if isValidId(postId);
+      allow list: if true; // Allow community feed viewing (read-only query safe checks)
+      
+      allow create: if isValidId(postId)
+        && isValidForumPost(incoming(request));
+
+      allow update: if isValidId(postId)
+        && isValidForumPost(incoming(request))
+        // Protect values - allow upvoting or adding comments anonymously or as registered author
+        && (
+          incoming(request).id == existing(resource).id
+        );
+
+      allow delete: if false; // Only sysadmins can clean up reports
     }
   }
 }

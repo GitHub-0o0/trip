@@ -7,6 +7,7 @@ import React from 'react';
 import { TripPlan, CitySelection } from '../types';
 import { TranslationDict } from '../data/i18n';
 import { ALL_CITIES_INDEX } from '../data/cities';
+import { getStoredExchangeRates } from '../utils/exchange';
 import { Archive, Calendar, Trash2, ArrowRight, FolderOpen, MapPin, Activity } from 'lucide-react';
 
 interface HistoryArchiveProps {
@@ -115,8 +116,8 @@ export default function HistoryArchive({ t, lang, plans, onSelectPlan, onDeleteP
                   <span>
                     {t.totalBudget}:{' '}
                     <span className="font-bold text-blue-600 text-sm">
-                      {lang === 'zh' ? '¥' : '$'}
-                      {p.totalBudget}
+                      ¥{p.totalBudget}
+                      {lang === 'en' && ` ($${Math.round(p.totalBudget / (getStoredExchangeRates()?.CNY || 7.24))})`}
                     </span>
                   </span>
                 </div>

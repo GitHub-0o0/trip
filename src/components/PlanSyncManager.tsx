@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { TripPlan } from '../types';
 import {
   Cloud,
@@ -89,6 +90,29 @@ export default function PlanSyncManager({
   const [activeSubTab, setActiveSubTab] = useState<'status' | 'notes' | 'history'>('status');
 
   const pollIntervalRef = useRef<any>(null);
+
+  // Collaborative toasts
+  interface CollaborativeToast {
+    id: string;
+    message: string;
+    author?: string;
+  }
+  const [toasts, setToasts] = useState<CollaborativeToast[]>([]);
+
+  const triggerCollaborativeToast = (authorName: string) => {
+    const id = `toast-${Date.now()}`;
+    const authorLabel = authorName || (lang === 'zh' ? '另一个设备' : 'Another connected device');
+    const message = lang === 'zh'
+      ? `检测到【${authorLabel}】修改了共享行程，已为您同步更新！`
+      : `Detected that [${authorLabel}] modified the shared itinerary, synchronized!`;
+    
+    setToasts(prev => [...prev, { id, message, author: authorLabel }]);
+
+    // Auto dismiss after 6 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 6000);
+  };
 
   // Auto-generate or read persistent unique device details
   useEffect(() => {
@@ -223,6 +247,12 @@ export default function PlanSyncManager({
           const remoteDigest = getPlanDigest(potentialNewPlan);
           
           if (remoteDigest !== currentLocalDigest) {
+            if (lastSavedDigest && remoteDigest !== lastSavedDigest) {
+              const lastAuthor = (data.history && data.history.length > 0)
+                ? data.history[0].author
+                : (lang === 'zh' ? '另一个设备' : 'Another connected device');
+              triggerCollaborativeToast(lastAuthor);
+            }
             onLoadSyncedPlan(potentialNewPlan);
             setLastSavedDigest(remoteDigest);
             setLastSyncedTime(new Date().toLocaleTimeString());
@@ -1068,6 +1098,41 @@ export default function PlanSyncManager({
           </div>
         </div>
       )}
+
+      {/* Float-in notification toasts */}
+      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full font-sans select-none pointer-events-none">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: 30, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8, y: -20, transition: { duration: 0.2 } }}
+              className="pointer-events-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-indigo-100 dark:border-slate-800 p-4 rounded-2xl shadow-[0_10px_30px_rgba(99,102,241,0.15)] flex gap-3 items-start select-none"
+            >
+              <div className="p-2 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0 animate-pulse">
+                <Wifi className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div className="flex-1 space-y-1">
+                <h5 className="text-[10px] font-extrabold text-indigo-650 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5" />
+                  <span>{lang === 'zh' ? '跨端协同动态' : 'COL-LAB CLOUD UPDATE'}</span>
+                </h5>
+                <p className="text-xs text-slate-700 dark:text-slate-200 font-semibold leading-relaxed">
+                  {toast.message}
+                </p>
+              </div>
+              <button
+                onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+                className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
+                title={lang === 'zh' ? '关闭' : 'Dismiss'}
+              >
+                <Plus className="w-3.5 h-3.5 rotate-45" />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

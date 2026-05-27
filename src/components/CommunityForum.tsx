@@ -13,7 +13,9 @@ import {
   DollarSign,
   Tag,
   Clock,
-  ExternalLink
+  ExternalLink,
+  Image,
+  X
 } from 'lucide-react';
 import { TripPlan } from '../types';
 
@@ -22,6 +24,7 @@ interface Comment {
   author: string;
   text: string;
   createdAt: string;
+  image?: string;
 }
 
 interface ForumPost {
@@ -63,6 +66,8 @@ export default function CommunityForum({
   // Comments interaction states
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const [commentAuthors, setCommentAuthors] = useState<Record<string, string>>({});
+  const [commentImages, setCommentImages] = useState<Record<string, string>>({});
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [clonedPostId, setClonedPostId] = useState<string | null>(null);
 
   // Active view details for trip plan preview inside the post
@@ -108,19 +113,21 @@ export default function CommunityForum({
   const handleCommentSubmit = async (postId: string) => {
     const text = commentTexts[postId] || '';
     const author = commentAuthors[postId] || '';
+    const image = commentImages[postId] || null;
     if (!text.trim()) return;
 
     try {
       const res = await fetch(`/api/forum/posts/${postId}/comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ author, text })
+        body: JSON.stringify({ author, text, image })
       });
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
           setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: data.comments } : p));
           setCommentTexts(prev => ({ ...prev, [postId]: '' }));
+          setCommentImages(prev => ({ ...prev, [postId]: '' }));
         }
       }
     } catch (err) {
@@ -505,8 +512,42 @@ export default function CommunityForum({
                                 </span>
                               </div>
                               <p className="text-slate-500 leading-relaxed pl-0.5">{comment.text}</p>
+                              {comment.image && (
+                                <div className="mt-1.5 pl-0.5">
+                                  <img 
+                                    src={comment.image} 
+                                    alt="Comment attachment" 
+                                    className="max-h-24 max-w-[120px] rounded-lg object-cover cursor-zoom-in hover:opacity-90 border border-slate-200 transition-all shadow-sm"
+                                    referrerPolicy="no-referrer"
+                                    onClick={() => setExpandedImage(comment.image || null)}
+                                  />
+                                </div>
+                              )}
                             </div>
                           ))}
+                        </div>
+                      )}
+
+                      {/* Image Preview if selected */}
+                      {commentImages[post.id] && (
+                        <div className="flex items-center gap-2 mt-2 p-2 bg-white border border-slate-200 rounded-xl max-w-fit relative animate-fade-in">
+                          <img 
+                            src={commentImages[post.id]} 
+                            alt="Selected comment upload" 
+                            className="w-12 h-12 rounded-lg object-cover border border-slate-200 bg-slate-100"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="text-[10px] text-slate-450 mr-4 font-medium pl-1">
+                            {lang === 'zh' ? '已选取首张图片' : 'Image selected'}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setCommentImages(prev => ({ ...prev, [post.id]: '' }))}
+                            className="absolute -top-1.5 -right-1.5 p-0.5 bg-rose-500 hover:bg-rose-600 text-white rounded-full transition-all cursor-pointer shadow-sm"
+                            title={lang === 'zh' ? '清除图片' : 'Clear image'}
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
                         </div>
                       )}
 
@@ -529,9 +570,30 @@ export default function CommunityForum({
                           }}
                           className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
+                        {/* Image Uploader Trigger */}
+                        <label className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-all cursor-pointer flex items-center justify-center">
+                          <Image className="w-3.5 h-3.5" />
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                const file = e.target.files[0];
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  if (typeof reader.result === 'string') {
+                                    setCommentImages(prev => ({ ...prev, [post.id]: reader.result as string }));
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
                         <button
                           onClick={() => handleCommentSubmit(post.id)}
-                          className="p-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg transition-all cursor-pointer"
+                          className="p-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg transition-all cursor-pointer flex items-center justify-center"
                         >
                           <Send className="w-3.5 h-3.5" />
                         </button>
@@ -544,6 +606,28 @@ export default function CommunityForum({
           </div>
         )}
       </div>
+
+      {/* Fullscreen Image Lightbox Preview */}
+      {expandedImage && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 animate-fade-in transition-all"
+          onClick={() => setExpandedImage(null)}
+          id="comment-image-lightbox"
+        >
+          <button 
+            onClick={() => setExpandedImage(null)}
+            className="absolute top-4 right-4 p-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-full transition-all cursor-pointer shadow-lg"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <img 
+            src={expandedImage} 
+            alt="Expanded attachment" 
+            className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl animate-scale-up border border-white/10"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+      )}
     </div>
   );
 }

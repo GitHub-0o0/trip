@@ -1165,6 +1165,240 @@ export const CITIES_DETAIL: { [cityId: string]: DetailedCityPlan } = {
         ]
       }
     ]
+  },
+  guangzhou: {
+    cityId: 'guangzhou',
+    cityName: '广州',
+    cityNameEn: 'Guangzhou',
+    daysCount: 2,
+    bestSeason: '10月-次年3月 (气温适宜，饮茶赏夜最佳)',
+    bestSeasonEn: 'Oct-Mar (Amiable cool breeze, prime Canton dining)',
+    localExpense: { tickets: 10, food: 180, hotel: 350, transit: 30 },
+    veteranTips: [
+      '“陶陶居”和“点都德”是极高人气的代表茶楼，建议上午8:00前抵达入座避开排队，享用地道早茶点心。',
+      '广州塔（小蛮腰）在江畔夜晚19:00至22:00亮灯最为绚烂。如果不想排长队登塔，珠江北岸的海心沙或花城广场是最佳免费拍照点。'
+    ],
+    veteranTipsEn: [
+      'Tao Tao Ju and Dian Du De are prime Cantonese tea houses. Secure seats before 08:00 AM to enjoy legendary dim sum stress-free.',
+      'Canton Tower lights up brilliantly from 19:00 to 22:00. Head to Haixinsha Park across the river for breathtaking free skyline views.'
+    ],
+    isAiEnhanced: false,
+    days: [
+      {
+        day: 1,
+        pois: [
+          {
+            id: 'gz-p1',
+            name: '陈家祠（岭南木雕石雕博物馆）',
+            nameEn: 'Chen Clan Ancestral Hall',
+            type: 'attraction',
+            time: '09:00',
+            duration: '2h',
+            cost: 10,
+            bestTime: '清晨柔和阳光照亮精细砖雕雕刻，适合微距摄影',
+            crowdTimes: '10:30后大批团客抵达，走廊较为拥挤',
+            tip: '堪称“岭南艺术建筑的璀璨明珠”。汇聚了极尽繁复的灰塑、石雕、木雕，每一处神话寓言栩栩如生。',
+            tipEn: 'Commonly framed as the crown jewel of Lingnan arts and architecture. Observe ornate brick reliefs and historical woodcarvings.',
+            coordinates: [23.1257, 113.2428]
+          },
+          {
+            id: 'gz-p2',
+            name: '泮溪酒家（荔湾湖畔园林早茶）',
+            nameEn: 'Panxi Garden Restaurant',
+            type: 'food',
+            time: '11:30',
+            duration: '1.5h',
+            cost: 80,
+            bestTime: '临池荷花阁榻，佐以精湛茶点，凉风过岸最惬意',
+            crowdTimes: '12:00-13:30 经典大厅全部客满',
+            tip: '全国极负盛名的国营老字号园林酒店。招牌红米肠、粉蒸排骨、笋尖虾饺让人流连忘返。',
+            tipEn: 'The monumental legacy Cantonese teahouse in Liwan. Enjoy traditional steam baskets beside bridges and weeping willows.',
+            coordinates: [23.1245, 113.2356]
+          },
+          {
+            id: 'gz-p3',
+            name: '沙面岛（欧华复古风情历史街区）',
+            nameEn: 'Shamian Island European Settlement',
+            type: 'attraction',
+            time: '14:30',
+            duration: '3h',
+            cost: 0,
+            bestTime: '落日晚霞斜斜透入斑驳古树阴，极富怀旧感',
+            crowdTimes: '周末下午会有大批婚纱摄影和旅拍人士聚集',
+            tip: '曾经的英法租界地，这里林立着数十座新古典主义、哥特及巴洛克式西式别墅。非常适合在绿荫下品尝精品冷萃咖啡。',
+            tipEn: 'The historical sandbox of classic European villas. Stroll amongst hundred-year camphor trees and colonial structures.',
+            coordinates: [23.1116, 113.2405]
+          }
+        ]
+      },
+      {
+        day: 2,
+        pois: [
+          {
+            id: 'gz-p4',
+            name: '海心桥与二沙岛步道',
+            nameEn: 'Haixin Bridge & Ersha Island Walk',
+            type: 'attraction',
+            time: '15:30',
+            duration: '2.5h',
+            cost: 0,
+            bestTime: '黄昏斜阳倒映珠江水面，微风微澜',
+            crowdTimes: '18:00后下班和散步市民会显著增加',
+            tip: '横跨珠江的标志性人行曲桥，从这可以闲庭信步至绿海般的二沙岛，两岸绿意葱茏，小蛮腰近在咫尺。',
+            tipEn: 'A magnificent curved pedestrian bridge across Pearl River. Walk among massive lawns to find stunning skyline points.',
+            coordinates: [23.1102, 113.3150]
+          },
+          {
+            id: 'gz-p5',
+            name: '惠食佳（Binjiang 滨江大连店）',
+            nameEn: 'Huishijia Gourmet Restaurant',
+            type: 'food',
+            time: '18:30',
+            duration: '2h',
+            cost: 130,
+            bestTime: '趁着热腾腾、滋滋作响端上桌时瞬间品尝，镬气十足',
+            crowdTimes: '每天晚上18:30-20:30排长队，一定要提前排号',
+            tip: '登上《舌尖上的中国》的招牌啫啫煲专家。黄鳝啫啫煲、蚝烙以及经典煲仔饭，绝对是广府厨艺精粹的完美体验。',
+            tipEn: 'The legendary establishment featured in documentaries. Sizzling claypots of fresh eel, ginger, and garlic caramelized perfectly.',
+            coordinates: [23.1112, 113.2750]
+          }
+        ]
+      }
+    ]
+  },
+  hangzhou: {
+    cityId: 'hangzhou',
+    cityName: '杭州',
+    cityNameEn: 'Hangzhou',
+    daysCount: 2,
+    bestSeason: '3月-5月 (桃花初綻、细雨苏堤)，9月-11月 (满陇桂雨、平湖秋月)',
+    bestSeasonEn: 'Mar-May (Spring peach blossoms and misty rains), Sep-Nov (Sweet osmanthus and clear golden moon)',
+    localExpense: { tickets: 55, food: 150, hotel: 420, transit: 30 },
+    veteranTips: [
+      '西湖在周末或晴天游客极多，强烈推荐安排清晨6:30以前或者晚上21:00之后散步游览，能完全领略到“苏堤春晓”的静谧神韵。',
+      '龙井村和九溪十八涧连接紧凑，非常适合下午开展徒步。在山谷农家院落，要一盏现泡正宗西湖龙井茶，呼吸雨林山谷芬芳。'
+    ],
+    veteranTipsEn: [
+      'The West Lake is legendary for holiday crowds. Try an early walk before 06:30 AM to catch Zen-like mist and glassy, quiet waters.',
+      'The Nine Creeks valley is perfect for woodland trekking. Order a cup of authentic organic Longjing Green Tea direct from tea farmers.'
+    ],
+    isAiEnhanced: false,
+    days: [
+      {
+        day: 1,
+        pois: [
+          {
+            id: 'hz-p1',
+            name: '西湖苏堤漫步与三潭印月游船',
+            nameEn: 'Su Causeway Walk & West Lake Ferry',
+            type: 'attraction',
+            time: '08:00',
+            duration: '3h',
+            cost: 55,
+            bestTime: '清晨微风吹动翠柳，湖面水平如镜，光影迷离',
+            crowdTimes: '09:30后团队大巴在断桥和堤岸集散，人稠',
+            tip: '乘船至湖心深处，能近距离观赏三座立于水中的宋代石塔，这也是中国人民币一元纸币的实景背景地。',
+            tipEn: 'Walk the classic willow-lined boulevard, then hop a wooden cruiser to view the three historical stone shrines rising out of the water.',
+            coordinates: [30.2450, 120.1412]
+          },
+          {
+            id: 'hz-p2',
+            name: '楼外楼（百年西湖畔名馆）',
+            nameEn: 'Lou Wai Lou Historic Lakeside Restaurant',
+            type: 'food',
+            time: '11:30',
+            duration: '1.5h',
+            cost: 110,
+            bestTime: '临窗隔案俯眺西湖水光，佐以名品香气，极为享受',
+            crowdTimes: '中午12:00后入店点餐通常需要等待超过半小时',
+            tip: '声名远扬的江南文化老字号。西湖醋鱼、东坡肉、龙井虾仁是代代相传、不容错过的极尽优雅名肴。',
+            tipEn: 'The hundred-year culinary landmark situated directly on West Lake edge. Taste glazed tender Dongpo pork cubes and sweetened vinegar sea fish.',
+            coordinates: [30.2520, 120.1420]
+          },
+          {
+            id: 'hz-p3',
+            name: '灵隐古刹与飞来峰造像',
+            nameEn: 'Lingyin Temple & Feilai Peak Grottoes',
+            type: 'attraction',
+            time: '14:00',
+            duration: '3.5h',
+            cost: 75,
+            bestTime: '午后斜光掠过古树林梢，投射在斑驳青苔和石壁大佛上，极富禅意',
+            crowdTimes: '主殿大雄宝殿内常年香火缭绕、游人如织',
+            tip: '隐于苍翠参天老树丛林中，灵隐寺是国内香火最旺的千年名刹。飞来峰石壁上开凿的数百尊精美佛雕刻功力非凡。',
+            tipEn: 'A magnificent thousand-year Buddhist monastery hidden in primeval towering cryptomeria glades. View ancient grotto sandstone carvings.',
+            coordinates: [30.2432, 120.1015]
+          }
+        ]
+      }
+    ]
+  },
+  london: {
+    cityId: 'london',
+    cityName: '伦敦',
+    cityNameEn: 'London',
+    daysCount: 2,
+    bestSeason: '5月-9月 (温和晴朗，昼长夜短多达16小时，公园绿阴如海)',
+    bestSeasonEn: 'May-Sep (Pleasant, sunny and cool. Long summer daylight up to 16h, lovely picnics)',
+    localExpense: { tickets: 40, food: 220, hotel: 750, transit: 50 },
+    veteranTips: [
+      '伦敦大部分顶级国家级博物馆（如大英博物馆、国家美术馆、自然历史博物馆）都是完全免费开放的，但一定要提前在官方网站上预定免费的入馆电子票。',
+      '伦敦眼的价格非常昂贵，如果想要免费饱览壮观的伦敦高空全景，可以提前预约位于金融城小山丘的空中花园 (Sky Garden)。'
+    ],
+    veteranTipsEn: [
+      'National museums in London (British Museum, National Gallery, etc.) are entirely free for the public, but booking timed-entry tickets online early is highly required.',
+      'The London Eye tickets are pricey; save budgets by booking free entrance passes to the Sky Garden for scenic, lush indoor platform panoramic views.'
+    ],
+    isAiEnhanced: false,
+    days: [
+      {
+        day: 1,
+        pois: [
+          {
+            id: 'ld-p1',
+            name: '大英博物馆（世界文明历史圣殿）',
+            nameEn: 'The British Museum',
+            type: 'attraction',
+            time: '10:00',
+            duration: '3.5h',
+            cost: 0,
+            bestTime: '上午入场，在大穹顶玻璃采光中拍摄恢宏合影',
+            crowdTimes: '每天的11:00后展厅的核心埃及木乃伊长廊会寸步难行',
+            tip: '震撼的世界文明宝库。千万不要错过罗塞塔石碑（Rosetta Stone）和精美绝伦的帕特农神庙大理石雕，饱览历史岁月。',
+            tipEn: 'The grand world treasure vault. Pay close inspection to the legendary Rosetta Stone and magnificent Elgin Marbles under the beautiful geometric glass dome.',
+            coordinates: [51.5194, -0.1270]
+          },
+          {
+            id: 'ld-p2',
+            name: 'The Eagle Pub（Covent Garden 经典地道酒馆）',
+            nameEn: 'The Eagle Pub - Covent Garden',
+            type: 'food',
+            time: '13:30',
+            duration: '1.5h',
+            cost: 30,
+            bestTime: '热气腾腾的刚起锅炸鱼入口一刻最为香酥。配上一口精酿，唇齿留香',
+            crowdTimes: '12:30 抢夺卡座极为活跃，排位较紧凑',
+            tip: '体验最正宗的伦敦饮食街头文化——大分量炸鱼薯条（Fish & Chips），搭配一口饱含果香的Pale Ale，风味绝佳。',
+            tipEn: 'Taste standard, perfectly battered crispy golden cod segments paired with fat chips, mushy peas and dynamic tartar sauces.',
+            coordinates: [51.5135, -0.1240]
+          },
+          {
+            id: 'ld-p3',
+            name: '大本钟、西敏寺与泰晤士河岸观景',
+            nameEn: 'Big Ben, Westminster & Thames Embankment',
+            type: 'attraction',
+            time: '15:30',
+            duration: '3h',
+            cost: 0,
+            bestTime: '日落晚霞勾勒出伦敦眼与红色双层巴士缓缓驶过西敏桥的黄金画面',
+            crowdTimes: '桥头中央地带游客极多，务必随时注意个人财物安全',
+            tip: '伦敦举世闻名的第一风景。拍摄壮观的伊丽莎白塔（大本钟），顺着江岸漫步至雄伟的威斯敏斯特教堂，耳畔回响沉重悠扬的古老钟声。',
+            tipEn: 'Take perfect postcards of the majestic Elizabeth Tower, cross the bridge to inspect Gothic Westminster Abbey, and listen to authentic chimes.',
+            coordinates: [51.5007, -0.1246]
+          }
+        ]
+      }
+    ]
   }
 };
 

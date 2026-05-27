@@ -7,7 +7,9 @@ import React, { useState, useEffect } from 'react';
 import { ALL_CITIES_INDEX, CN_CITIES, INTL_CITIES } from '../data/cities';
 import { CityIndex, CitySelection, CustomLlmConfig } from '../types';
 import { TranslationDict } from '../data/i18n';
-import { Search, MapPin, Plus, Trash2, Sliders, ChevronRight, HelpCircle, Compass, ArrowRight, Loader, Sparkles } from 'lucide-react';
+import { Search, MapPin, Plus, Trash2, Sliders, ChevronRight, HelpCircle, Compass, ArrowRight, Loader, Sparkles, GripVertical, Calendar, Clock, Plane, Train, Car, Users } from 'lucide-react';
+import ImagePlanner from './ImagePlanner';
+import { analyzeTravelDate } from '../utils/dateOptimizer';
 
 interface CitySelectorProps {
   t: TranslationDict;
@@ -23,6 +25,18 @@ interface CitySelectorProps {
   customLlmConfig: CustomLlmConfig;
   customCities: CityIndex[];
   onAddCustomCity: (city: CityIndex) => void;
+  departureDate: string;
+  setDepartureDate: (date: string) => void;
+  departureTime: string;
+  setDepartureTime: (time: string) => void;
+  returnDate: string;
+  setReturnDate: (date: string) => void;
+  returnTime: string;
+  setReturnTime: (time: string) => void;
+  travelMode: string;
+  setTravelMode: (mode: string) => void;
+  travelerCount: number;
+  setTravelerCount: (count: number) => void;
 }
 
 export default function CitySelector({
@@ -38,9 +52,58 @@ export default function CitySelector({
   isLoading,
   customLlmConfig,
   customCities,
-  onAddCustomCity
+  onAddCustomCity,
+  departureDate,
+  setDepartureDate,
+  departureTime,
+  setDepartureTime,
+  returnDate,
+  setReturnDate,
+  returnTime,
+  setReturnTime,
+  travelMode,
+  setTravelMode,
+  travelerCount,
+  setTravelerCount
 }: CitySelectorProps) {
   const [step, setStep] = useState<1 | 2>(1);
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIdx(index);
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', index.toString());
+      
+      // Make drag preview nicer in modern engines
+      try {
+        const dragGhost = (e.currentTarget as HTMLElement).cloneNode(true) as HTMLElement;
+        dragGhost.style.opacity = '0.7';
+        dragGhost.style.position = 'absolute';
+        dragGhost.style.top = '-9999px';
+        document.body.appendChild(dragGhost);
+        e.dataTransfer.setDragImage(dragGhost, 20, 20);
+        setTimeout(() => document.body.removeChild(dragGhost), 0);
+      } catch (err) {
+        // fallback to standard browser drag ghost
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIdx === null || draggedIdx === index) return;
+
+    const updated = [...selectedDestinations];
+    const [removed] = updated.splice(draggedIdx, 1);
+    updated.splice(index, 0, removed);
+    setDraggedIdx(index);
+    setSelectedDestinations(updated);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIdx(null);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<CityIndex[]>([]);
   const [regionFilter, setRegionFilter] = useState<'all' | 'cn' | 'intl'>('all');
@@ -387,6 +450,239 @@ export default function CitySelector({
             </div>
           </div>
 
+          {/* Actual Travel Date & Time Picker */}
+          <div className="bg-slate-50/60 border border-slate-200 rounded-3xl p-5 md:p-6 space-y-4">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-200/60">
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl shadow-xs">
+                <Calendar className="w-4.5 h-4.5" />
+              </div>
+              <div className="text-left">
+                <h4 className="font-sans font-bold text-slate-800 text-xs">
+                  {lang === 'zh' ? '📅 出行日程与综合交通规划' : '📅 Travel Schedule & Transit Planner'}
+                </h4>
+                <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                  {lang === 'zh'
+                    ? '自适应动态优化多站景点的开放特性、当地推荐活动推荐、交通工具预算计算、整体酒店安排以及景区客流指数'
+                    : 'Adaptive calculations of crowd volumes, seasonality, travel modes, and overall hotel budgets dynamic optimization.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Departure Section */}
+              <div className="space-y-3 bg-white p-4 rounded-2xl border border-slate-200/80">
+                <div className="text-[11px] font-bold text-indigo-600 tracking-wider flex items-center gap-1">
+                  <span>🛫</span>
+                  <span>{lang === 'zh' ? '启程出发配置' : 'DEPARTURE SCHEDULE'}</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1 text-left">
+                    <label className="block text-[10px] text-slate-400 font-bold uppercase">
+                      {lang === 'zh' ? '首站出发日期' : 'Departure Date'}
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-2.5 top-2.5 text-slate-400 w-3.5 h-3.5" />
+                      <input
+                        type="date"
+                        value={departureDate}
+                        onChange={(e) => setDepartureDate(e.target.value)}
+                        className="w-full bg-slate-50/60 border border-slate-200 rounded-xl pl-8 pr-2 py-2 text-xs text-slate-700 cursor-pointer focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 text-left">
+                    <label className="block text-[10px] text-slate-400 font-bold uppercase">
+                      {lang === 'zh' ? '出发时刻' : 'Departure Time'}
+                    </label>
+                    <div className="relative">
+                      <Clock className="absolute left-2.5 top-2.5 text-slate-400 w-3.5 h-3.5" />
+                      <input
+                        type="time"
+                        value={departureTime}
+                        onChange={(e) => setDepartureTime(e.target.value)}
+                        className="w-full bg-slate-50/60 border border-slate-200 rounded-xl pl-8 pr-2 py-2 text-xs text-slate-700 cursor-pointer focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Return Section */}
+              <div className="space-y-3 bg-white p-4 rounded-2xl border border-slate-200/80">
+                <div className="text-[11px] font-bold text-rose-500 tracking-wider flex items-center gap-1">
+                  <span>🛬</span>
+                  <span>{lang === 'zh' ? '回程返程配置' : 'RETURN SCHEDULE'}</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1 text-left">
+                    <label className="block text-[10px] text-slate-400 font-bold uppercase">
+                      {lang === 'zh' ? '末站回程日期' : 'Return Date'}
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-2.5 top-2.5 text-slate-400 w-3.5 h-3.5" />
+                      <input
+                        type="date"
+                        value={returnDate}
+                        onChange={(e) => setReturnDate(e.target.value)}
+                        className="w-full bg-slate-50/60 border border-slate-200 rounded-xl pl-8 pr-2 py-2 text-xs text-slate-700 cursor-pointer focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 text-left">
+                    <label className="block text-[10px] text-slate-400 font-bold uppercase">
+                      {lang === 'zh' ? '回程时刻' : 'Return Time'}
+                    </label>
+                    <div className="relative">
+                      <Clock className="absolute left-2.5 top-2.5 text-slate-400 w-3.5 h-3.5" />
+                      <input
+                        type="time"
+                        value={returnTime}
+                        onChange={(e) => setReturnTime(e.target.value)}
+                        className="w-full bg-slate-50/60 border border-slate-200 rounded-xl pl-8 pr-2 py-2 text-xs text-slate-700 cursor-pointer focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Validation warnings */}
+            {returnDate && departureDate && returnDate < departureDate && (
+              <div className="p-2.5 bg-rose-50 border border-rose-100 text-rose-700 rounded-xl text-[10px] font-bold text-left flex items-start gap-1.5 shadow-3xs animate-pulse">
+                <span>⚠️</span>
+                <span>{lang === 'zh' ? '温馨提示：回程日期不得早于您的出发日期，请再次检查行程规划' : 'Kindly check: Your return date should be on or after the starting departure date!'}</span>
+              </div>
+            )}
+
+            {/* Travel Mode/Transit Method Preference */}
+            <div className="space-y-2 text-left pt-1">
+              <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                {lang === 'zh' ? '首选出行交通方式偏好' : 'Travel Mode / Transit Preference'}
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { id: 'all', labelZh: '🌍 智能推荐 / 不限', labelEn: '🌍 Smart Route', icon: Sparkles },
+                  { id: 'flight', labelZh: '✈️ 航班首选', labelEn: '✈️ Aircraft Prefer', icon: Plane },
+                  { id: 'train', labelZh: '🚄 高铁优先', labelEn: '🚄 Railway Prefer', icon: Train },
+                  { id: 'car', labelZh: '🚗 自驾/包车', labelEn: '🚗 Car Charter', icon: Car },
+                ].map((mode) => {
+                  const ModeIcon = mode.icon;
+                  const isSelected = travelMode === mode.id;
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setTravelMode(mode.id)}
+                      className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                        isSelected
+                          ? 'bg-blue-600 border-blue-600 text-white shadow-xs font-semibold'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <ModeIcon className="w-3.5 h-3.5" />
+                      <span>{lang === 'zh' ? mode.labelZh.split(' ')[1] : mode.labelEn}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Traveler Count Selection */}
+            <div className="space-y-2 text-left pt-2 pb-1">
+              <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-indigo-500" />
+                <span>{lang === 'zh' ? '同行旅客人数选择 (智能核算共享住宿与车辆)' : 'Number of Travelers Preference'}</span>
+              </label>
+              <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-xl p-3 max-w-sm shadow-3xs">
+                <button
+                  type="button"
+                  onClick={() => setTravelerCount(Math.max(1, travelerCount - 1))}
+                  disabled={travelerCount <= 1}
+                  className="w-9 h-9 rounded-lg bg-slate-50 hover:bg-slate-100 flex items-center justify-center font-bold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all border border-slate-200 select-none text-lg"
+                >
+                  -
+                </button>
+                <div className="flex-1 text-center font-sans font-extrabold text-slate-800 text-sm">
+                  {travelerCount} {lang === 'zh' ? '人同行' : travelerCount === 1 ? 'Traveler' : 'Travelers'}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTravelerCount(travelerCount + 1)}
+                  className="w-9 h-9 rounded-lg bg-slate-50 hover:bg-slate-100 flex items-center justify-center font-bold text-slate-700 transition-all border border-slate-200 select-none text-lg"
+                >
+                  +
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
+                {lang === 'zh' 
+                  ? '💡 出行人数调整将自动优化个人大交通（车机票）、门票、餐饮及共享成本（如双人标间酒店、租车合乘等）。'
+                  : '💡 Dynamic traveler count scales individual transit tickets and admission charges linearly while shared hotel rooms and cars are optimized.'}
+              </p>
+            </div>
+
+            {/* Live forecast panel based on selected date */}
+
+            {/* Live forecast panel based on selected date */}
+            {departureDate && (() => {
+              const analysis = analyzeTravelDate(departureDate, departureCity || 'beijing', lang);
+              return (
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-2.5 shadow-3xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>💡</span>
+                      {lang === 'zh' ? '行前专家季节提示' : 'Live Season Forecast'}
+                    </span>
+                    <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full border ${
+                      analysis.classification === 'peak' ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                      analysis.classification === 'off-peak' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                      'bg-blue-50 text-blue-700 border-blue-100'
+                    }`}>
+                      {analysis.badge}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-xs font-sans text-slate-500 leading-relaxed text-left">
+                    <div className="flex items-start gap-1.5">
+                      <span className="shrink-0 text-indigo-500 font-semibold">🌍</span>
+                      <span>
+                        <strong className="text-slate-700">{lang === 'zh' ? '气候特性：' : 'Climate: '}</strong>
+                        {analysis.seasonName}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <span className="shrink-0 text-amber-500 font-semibold">☀️</span>
+                      <span>
+                        <strong className="text-slate-700">{lang === 'zh' ? '白昼日照：' : 'Daylight Hours: '}</strong>
+                        {analysis.daylightTip}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <span className="shrink-0 text-rose-500 font-semibold">👥</span>
+                      <span>
+                        <strong className="text-slate-700">{lang === 'zh' ? '客流指数：' : 'Crowd Indices: '}</strong>
+                        {analysis.crowdTip}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* New Image Upload AI Planner */}
+          <ImagePlanner
+            lang={lang}
+            customLlmConfig={customLlmConfig}
+            onImport={(depId, dests) => {
+              setDepartureCity(depId);
+              setSelectedDestinations(dests);
+              triggerToast(lang === 'zh' ? '🎉 已成功从图像中导入航线与天数日程！' : '🎉 Successfully imported itinerary stops from image!');
+              setStep(2);
+            }}
+          />
+
           {/* Selected Chip Overview block */}
           {departureCity && (
             <div className="bg-blue-50/40 border border-blue-100 rounded-2xl p-4.5 flex items-center justify-between">
@@ -531,71 +827,93 @@ export default function CitySelector({
           {/* Added Destinations Card Container */}
           {selectedDestinations.length > 0 && (
             <div className="space-y-3">
-              <h4 className="font-sans font-bold text-slate-500 text-xs uppercase tracking-wider">
-                {t.selectedDestsTitle} ({selectedDestinations.length}/10)
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="font-sans font-bold text-slate-500 text-xs uppercase tracking-wider">
+                  {t.selectedDestsTitle} ({selectedDestinations.length}/10)
+                </h4>
+                {selectedDestinations.length > 1 && (
+                  <span className="text-[10px] text-blue-600 bg-blue-50/80 px-2.5 py-1 rounded-xl font-bold flex items-center gap-1">
+                    <span>↕️</span>
+                    <span>{lang === 'zh' ? '鼠标长按并拖拽卡片可调整先后顺序' : 'Drag cards to adjust visit order'}</span>
+                  </span>
+                )}
+              </div>
               <div className="space-y-2.5 max-h-72 overflow-y-auto scrollbar-none pr-1">
-                {selectedDestinations.map((dest, index) => (
-                  <div
-                    key={dest.cityId}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4.5 bg-slate-50 border border-slate-200 rounded-2xl hover:border-blue-200 hover:bg-blue-50/10 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center font-sans font-extrabold text-xs text-blue-600">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <span className="font-sans text-sm font-bold text-slate-800">
-                          {getCityLabel(dest.cityId)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Adjust stay days */}
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500 font-bold font-sans">{t.daysLabel}:</span>
-                        <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5 bg-white shadow-sm shadow-slate-100">
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateDays(dest.cityId, dest.days - 1)}
-                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 font-sans font-bold text-sm"
-                          >
-                            -
-                          </button>
-                          <span className="w-7 text-center font-mono text-xs font-bold text-slate-800">
-                            {dest.days}
+                {selectedDestinations.map((dest, index) => {
+                  const isBeingDragged = draggedIdx === index;
+                  return (
+                    <div
+                      key={dest.cityId}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragEnd={handleDragEnd}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4.5 rounded-2xl border transition-all select-none ${
+                        isBeingDragged
+                          ? 'opacity-35 border-dashed border-blue-400 bg-blue-50/20 scale-[0.97] shadow-inner'
+                          : 'bg-slate-50 border-slate-200 hover:border-blue-200 hover:bg-blue-50/10 cursor-grab active:cursor-grabbing hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="text-slate-400 cursor-grab active:cursor-grabbing hover:text-blue-500 p-0.5">
+                          <GripVertical className="w-4 h-4" />
+                        </div>
+                        <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center font-sans font-extrabold text-xs text-blue-600 border border-blue-100 bg-white shadow-sm shrink-0">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <span className="font-sans text-sm font-bold text-slate-800 tracking-tight">
+                            {getCityLabel(dest.cityId)}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateDays(dest.cityId, dest.days + 1)}
-                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 font-sans font-bold text-sm"
-                          >
-                            +
-                          </button>
                         </div>
                       </div>
 
-                      {/* Slider alternative control */}
-                      <input
-                        type="range"
-                        min="1"
-                        max="15"
-                        value={dest.days}
-                        onChange={(e) => handleUpdateDays(dest.cityId, parseInt(e.target.value))}
-                        className="w-24 accent-blue-600 cursor-ew-resize h-1 bg-slate-200 rounded-lg"
-                      />
+                      {/* Adjust stay days */}
+                      <div className="flex items-center gap-4" onDragOver={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 font-bold font-sans">{t.daysLabel}:</span>
+                          <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5 bg-white shadow-sm shadow-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateDays(dest.cityId, dest.days - 1)}
+                              className="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 font-sans font-bold text-sm"
+                            >
+                              -
+                            </button>
+                            <span className="w-7 text-center font-mono text-xs font-bold text-slate-800">
+                              {dest.days}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateDays(dest.cityId, dest.days + 1)}
+                              className="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 font-sans font-bold text-sm"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveDestination(dest.cityId)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        {/* Slider alternative control */}
+                        <input
+                          type="range"
+                          min="1"
+                          max="15"
+                          value={dest.days}
+                          onChange={(e) => handleUpdateDays(dest.cityId, parseInt(e.target.value))}
+                          className="w-24 accent-blue-600 cursor-ew-resize h-1 bg-slate-200 rounded-lg"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDestination(dest.cityId)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
